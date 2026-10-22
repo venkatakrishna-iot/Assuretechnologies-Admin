@@ -12,12 +12,13 @@ export const loginUser = (user: AuthUser) => {
 
 // 🔹 Logout Operation: Clear cache
 export const logoutUser = () => {
+  localStorage.removeItem("admin_token");
   localStorage.removeItem("user");
 };
 
 // 🔹 Check Authentication State
 export const isAuthenticated = (): boolean => {
-  return !!localStorage.getItem("user");
+  return !!localStorage.getItem("user") || !!localStorage.getItem("admin_token");
 };
 
 // 🔹 Get Authenticated User Profile

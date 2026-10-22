@@ -31,6 +31,9 @@ export default function Login() {
       const response = await API.post('/auth/admin/login', { email, password });
       
       if (response.data.success) {
+        if (response.data.data?.token) {
+          localStorage.setItem('admin_token', response.data.data.token);
+        }
         loginUser(response.data.data.user);
         
         Swal.fire({
