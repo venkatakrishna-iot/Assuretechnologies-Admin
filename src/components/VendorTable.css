@@ -1,43 +1,81 @@
-.table-container {
-  overflow-x: auto;
+.table-container,
+.vendor-table-container {
+  overflow-x: auto !important;
   border-radius: 12px;
   background: white;
   border: 1px solid var(--border);
   margin-bottom: 20px;
-  width: 100%;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  display: block !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: #4f46e5 #e2e8f0 !important;
 }
 
+/* Highly visible horizontal scrollbar displayed directly below vendor table */
+.table-container::-webkit-scrollbar,
+.vendor-table-container::-webkit-scrollbar {
+  height: 12px !important;
+  display: block !important;
+}
 
+.table-container::-webkit-scrollbar-track,
+.vendor-table-container::-webkit-scrollbar-track {
+  background: #f1f5f9 !important;
+  border-bottom-left-radius: 11px;
+  border-bottom-right-radius: 11px;
+}
 
-.custom-table {
-  width: 100%;
+.table-container::-webkit-scrollbar-thumb,
+.vendor-table-container::-webkit-scrollbar-thumb {
+  background: #4f46e5 !important;
+  border-radius: 6px;
+  border: 2px solid #f1f5f9;
+}
+
+.table-container::-webkit-scrollbar-thumb:hover,
+.vendor-table-container::-webkit-scrollbar-thumb:hover {
+  background: #4338ca !important;
+}
+
+.custom-table,
+.vendor-table {
+  width: 100% !important;
+  min-width: 1280px !important;
   border-collapse: collapse;
   text-align: left;
   font-size: 0.95rem;
 }
 
-.custom-table th {
+.custom-table th,
+.vendor-table th {
   background-color: #1e293b;
   color: #f8fafc;
   padding: 16px;
   font-weight: 600;
   text-transform: capitalize;
   letter-spacing: 0.5px;
+  white-space: nowrap !important;
 }
 
-.custom-table th:first-child {
+.custom-table th:first-child,
+.vendor-table th:first-child {
   border-top-left-radius: 12px;
 }
 
-.custom-table th:last-child {
+.custom-table th:last-child,
+.vendor-table th:last-child {
   border-top-right-radius: 12px;
 }
 
-.custom-table td {
+.custom-table td,
+.vendor-table td {
   padding: 16px;
   border-bottom: 1px solid var(--border);
   color: var(--text-main);
   vertical-align: middle;
+  white-space: nowrap !important;
 }
 
 .custom-table tbody tr {
@@ -58,6 +96,7 @@
   font-size: 0.85rem;
   font-weight: 600;
   display: inline-block;
+  white-space: nowrap;
 }
 
 .status-badge.active {
@@ -74,6 +113,9 @@
   display: flex;
   gap: 12px;
   align-items: center;
+  min-width: 130px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .icon-btn {

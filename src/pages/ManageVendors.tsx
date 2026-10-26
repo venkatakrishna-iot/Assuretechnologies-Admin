@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { MdSearch } from 'react-icons/md';
 import type { Vendor } from '../types';
 import VendorTable from '../components/VendorTable';
@@ -168,7 +168,7 @@ export default function ManageVendors() {
         </div>
       </div>
 
-      <div style={{ position: 'relative', minHeight: '300px' }}>
+      <div className="manage-vendors-table-wrapper">
         {loading && (
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10 }}>
             <div style={{ width: '40px', height: '40px', border: '4px solid #f3f3f3', borderTop: '4px solid #4F46E5', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>

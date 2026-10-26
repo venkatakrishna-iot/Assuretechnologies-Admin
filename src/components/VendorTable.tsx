@@ -19,8 +19,8 @@ export default function VendorTable({ vendors, onEdit, onDelete, onToggleStatus 
   }
 
   return (
-    <div className="table-container">
-      <table className="custom-table">
+    <div className="table-container vendor-table-container">
+      <table className="custom-table vendor-table">
         <thead>
           <tr>
             <th>Vendor ID</th>
@@ -44,7 +44,7 @@ export default function VendorTable({ vendors, onEdit, onDelete, onToggleStatus 
                 <div style={{ fontSize: '12px', color: '#9ca3af' }}>{vendor.email}</div>
               </td>
               <td>{vendor.gstNumber}</td>
-              <td>{vendor.fullAddress}</td>
+              <td title={vendor.fullAddress}>{vendor.fullAddress}</td>
               <td>
                 <span className={`status-badge ${vendor.status.toLowerCase()}`}>
                   {vendor.status}
