@@ -20,6 +20,20 @@ export default function ServiceRequestDetailsModal({ request, technician, onClos
     return () => setMounted(false);
   }, []);
 
+  const formatAddress = (addr?: string) => {
+    if (!addr) return 'Address not provided';
+    try {
+      const obj = typeof addr === 'string' && (addr.startsWith('{') || addr.startsWith('[')) ? JSON.parse(addr) : addr;
+      if (typeof obj === 'object' && obj !== null) {
+        const parts = [obj.line1, obj.line2, obj.city, obj.state, obj.pincode, obj.country].filter(Boolean);
+        return parts.length > 0 ? parts.join(', ') : JSON.stringify(obj);
+      }
+      return String(addr);
+    } catch (e) {
+      return String(addr);
+    }
+  };
+
   if (!mounted) return null;
 
   return createPortal(
@@ -59,6 +73,9 @@ export default function ServiceRequestDetailsModal({ request, technician, onClos
             </div>
             <div className="details-row">
               <strong>Email:</strong> {request.userEmail}
+            </div>
+            <div className="details-row">
+              <strong>Address:</strong> {formatAddress(request.userAddress)}
             </div>
           </div>
 
