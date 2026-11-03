@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { MdClose, MdPersonOutline, MdLocationOn, MdCreditCard, MdVerifiedUser } from 'react-icons/md';
 import type { Order, OrderItem } from '../types';
+import { getGstStateCode, isSameStateAsCompany, GST_STATE_CODES } from '../data/gstStateCodes';
 import './OrderModal.css';
 
 interface OrderModalProps {
@@ -64,6 +65,21 @@ function formatDeliveryAddress(rawAddress: string, fallbackPin?: string): Parsed
 export default function OrderModal({ order, onClose, onSplitClick }: OrderModalProps) {
   const addressInfo = formatDeliveryAddress(order.address, order.pincode);
   const [copiedId, setCopiedId] = useState(false);
+
+  const stateCode = getGstStateCode(order.gstStateCode || order.gstNumber || addressInfo.line2 || '37');
+  const matchedState = GST_STATE_CODES.find(s => s.code === stateCode);
+  const isSameState = isSameStateAsCompany(stateCode);
+
+  const taxableSubtotal = order.subtotalAmount !== undefined 
+    ? order.subtotalAmount 
+    : order.items.reduce((sum, item) => sum + (item.taxableBase ?? item.subtotal), 0);
+
+  const totalTax = order.taxAmount !== undefined 
+    ? order.taxAmount 
+    : order.items.reduce((sum, item) => sum + (item.taxAmount ?? 0), 0);
+
+  const grandTotal = order.totalAmount || (taxableSubtotal + totalTax);
+
   return createPortal(
     <div className="order-modal-overlay" onClick={onClose}>
       <div className="order-modal-content" onClick={(e) => e.stopPropagation()}>
@@ -97,13 +113,33 @@ export default function OrderModal({ order, onClose, onSplitClick }: OrderModalP
                 <p className="bold-text">{order.user}</p>
                 <p>{order.mobile}</p>
                 <p>{order.email}</p>
-                {order.gstNumber && (
-                  <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed #eee' }}>
-                    <p className="bold-text">Business Customer</p>
-                    {order.companyName && <p>{order.companyName}</p>}
-                    <p>GST: {order.gstNumber}</p>
-                  </div>
-                )}
+                <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed #eee' }}>
+                  {order.gstNumber ? (
+                    <>
+                      <p className="bold-text">Business Customer</p>
+                      {order.companyName && <p>{order.companyName}</p>}
+                      <p>GST: {order.gstNumber}</p>
+                    </>
+                  ) : (
+                    <p style={{ fontSize: '12px', color: '#64748b' }}>Retail Customer (B2C)</p>
+                  )}
+                  {stateCode && (
+                    <div style={{ marginTop: '6px' }}>
+                      <span style={{ 
+                        background: isSameState ? '#ecfdf5' : '#eff6ff', 
+                        color: isSameState ? '#065f46' : '#1e40af', 
+                        border: `1px solid ${isSameState ? '#a7f3d0' : '#bfdbfe'}`,
+                        borderRadius: '4px',
+                        padding: '2px 8px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        display: 'inline-block'
+                      }}>
+                        {isSameState ? `Intra-State: CGST + SGST (AP - ${stateCode})` : `Inter-State: IGST (${matchedState ? matchedState.name : stateCode} - ${stateCode})`}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -200,40 +236,86 @@ export default function OrderModal({ order, onClose, onSplitClick }: OrderModalP
                   <th>#</th>
                   <th>Product</th>
                   <th>Vendor</th>
-                  <th>Price</th>
+                  <th>Rate (Incl. of Tax)</th>
+                  <th>Rate (Excl. of Tax)</th>
+                  <th>GST Slab</th>
                   <th>Qty</th>
-                  <th>Subtotal</th>
+                  <th>Taxable Base</th>
+                  <th>Tax Amount</th>
+                  <th>Total</th>
                   {onSplitClick && <th>Action</th>}
                 </tr>
               </thead>
               <tbody>
-                {order.items.map((item, index) => (
-                  <tr key={item.id}>
-                    <td>{index + 1}</td>
-                    <td>{item.productName}</td>
-                    <td>
-                      <span className="vendor-badge">{item.vendorName}</span>
-                    </td>
-                    <td>₹{item.price.toFixed(2)}</td>
-                    <td>{item.qty}</td>
-                    <td>₹{item.subtotal.toFixed(2)}</td>
-                    {onSplitClick && (
+                {order.items.map((item, index) => {
+                  const unitPrice = item.price;
+                  const slab = item.taxSlab != null ? item.taxSlab : 18;
+                  const itemBase = item.taxableBase ?? item.subtotal;
+                  const rateExcl = item.qty ? (itemBase / item.qty) : itemBase;
+                  const itemTax = item.taxAmount ?? ((unitPrice * item.qty) - itemBase);
+                  const itemTotal = item.itemTotal ?? (unitPrice * item.qty);
+
+                  return (
+                    <tr key={item.id}>
+                      <td>{index + 1}</td>
+                      <td>{item.productName}</td>
                       <td>
-                        <button
-                          className="order-item-split-btn"
-                          onClick={() => onSplitClick(item)}
-                          title="Split order item to another vendor"
-                        >
-                          Split
-                        </button>
+                        <span className="vendor-badge">{item.vendorName}</span>
                       </td>
-                    )}
-                  </tr>
-                ))}
+                      <td style={{ fontWeight: 600, color: '#0f766e' }}>₹{unitPrice.toFixed(2)}</td>
+                      <td>₹{rateExcl.toFixed(2)}</td>
+                      <td>
+                        <span style={{ fontSize: '11px', fontWeight: 600, background: '#f1f5f9', color: '#334155', padding: '2px 6px', borderRadius: '4px' }}>
+                          {slab}%
+                        </span>
+                      </td>
+                      <td>{item.qty}</td>
+                      <td>₹{itemBase.toFixed(2)}</td>
+                      <td>₹{itemTax.toFixed(2)}</td>
+                      <td style={{ fontWeight: 600 }}>₹{itemTotal.toFixed(2)}</td>
+                      {onSplitClick && (
+                        <td>
+                          <button
+                            className="order-item-split-btn"
+                            onClick={() => onSplitClick(item)}
+                            title="Split order item to another vendor"
+                          >
+                            Split
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
                 <tr className="order-items-footer">
-                  <td colSpan={onSplitClick ? 5 : 4}></td>
-                  <td style={{ textAlign: 'right', paddingRight: '24px' }}>Total Payable</td>
-                  <td>₹{order.totalAmount.toFixed(2)}</td>
+                  <td colSpan={onSplitClick ? 8 : 7}></td>
+                  <td style={{ textAlign: 'right', paddingRight: '20px', color: '#64748b' }}>Taxable Subtotal</td>
+                  <td style={{ fontWeight: 500 }}>₹{taxableSubtotal.toFixed(2)}</td>
+                </tr>
+                {isSameState ? (
+                  <>
+                    <tr className="order-items-footer" style={{ borderTop: 'none' }}>
+                      <td colSpan={onSplitClick ? 8 : 7}></td>
+                      <td style={{ textAlign: 'right', paddingRight: '20px', color: '#64748b' }}>CGST</td>
+                      <td style={{ fontWeight: 500 }}>₹{(totalTax / 2).toFixed(2)}</td>
+                    </tr>
+                    <tr className="order-items-footer" style={{ borderTop: 'none' }}>
+                      <td colSpan={onSplitClick ? 8 : 7}></td>
+                      <td style={{ textAlign: 'right', paddingRight: '20px', color: '#64748b' }}>SGST</td>
+                      <td style={{ fontWeight: 500 }}>₹{(totalTax / 2).toFixed(2)}</td>
+                    </tr>
+                  </>
+                ) : (
+                  <tr className="order-items-footer" style={{ borderTop: 'none' }}>
+                    <td colSpan={onSplitClick ? 8 : 7}></td>
+                    <td style={{ textAlign: 'right', paddingRight: '20px', color: '#64748b' }}>IGST</td>
+                    <td style={{ fontWeight: 500 }}>₹{totalTax.toFixed(2)}</td>
+                  </tr>
+                )}
+                <tr className="order-items-footer" style={{ background: '#f8fafc', fontWeight: 'bold' }}>
+                  <td colSpan={onSplitClick ? 8 : 7}></td>
+                  <td style={{ textAlign: 'right', paddingRight: '20px', color: '#0f172a', fontSize: '1rem' }}>Total Amount</td>
+                  <td style={{ color: '#0f766e', fontSize: '1rem', fontWeight: 'bold' }}>₹{grandTotal.toFixed(2)}</td>
                 </tr>
               </tbody>
             </table>

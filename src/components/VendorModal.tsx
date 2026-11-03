@@ -1,7 +1,8 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { FiUploadCloud } from 'react-icons/fi';
 import type { Vendor } from '../types';
+import { GST_STATE_CODES, getGstStateCode } from '../data/gstStateCodes';
 import './VendorModal.css';
 
 interface VendorModalProps {
@@ -18,6 +19,7 @@ export default function VendorModal({ isOpen, onClose, onSave, vendor }: VendorM
     mobile: '',
     email: '',
     gstNumber: '',
+    gstStateCode: '37',
     fullAddress: '',
     pincode: '',
     businessDescription: '',
@@ -33,12 +35,15 @@ export default function VendorModal({ isOpen, onClose, onSave, vendor }: VendorM
 
   useEffect(() => {
     if (vendor) {
+      const vGst = vendor.gstNumber || '';
+      const vCode = (vendor as any).gstStateCode || getGstStateCode(vGst) || '37';
       setFormData({
         fullName: vendor.fullName || '',
         businessName: vendor.businessName || '',
         mobile: vendor.mobile || '',
         email: vendor.email || '',
-        gstNumber: vendor.gstNumber || '',
+        gstNumber: vGst,
+        gstStateCode: vCode,
         fullAddress: vendor.fullAddress || '',
         pincode: vendor.pincode || '',
         businessDescription: vendor.businessDescription || '',
@@ -49,6 +54,26 @@ export default function VendorModal({ isOpen, onClose, onSave, vendor }: VendorM
   }, [vendor]);
 
   if (!isOpen) return null;
+
+  const handleStateCodeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newCode = e.target.value;
+    setFormData(prev => {
+      let updatedGst = prev.gstNumber;
+      if (!updatedGst) {
+        updatedGst = newCode;
+      } else if (updatedGst.length >= 2) {
+        updatedGst = newCode + updatedGst.slice(2);
+      } else {
+        updatedGst = newCode;
+      }
+      return {
+        ...prev,
+        gstStateCode: newCode,
+        gstNumber: updatedGst
+      };
+    });
+    setErrors(prev => ({ ...prev, gstNumber: '' }));
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -62,6 +87,15 @@ export default function VendorModal({ isOpen, onClose, onSave, vendor }: VendorM
       newValue = value.replace(/[^A-Za-z0-9\s]/g, ''); // Alphanumeric and spaces
     } else if (name === 'gstNumber') {
       newValue = value.replace(/[^A-Za-z0-9]/g, '').toUpperCase(); // Alphanumeric uppercase only
+      // Auto sync state code dropdown if first 2 digits match a known code
+      if (newValue.length >= 2) {
+        const detectedCode = getGstStateCode(newValue.slice(0, 2));
+        if (detectedCode) {
+          setFormData(prev => ({ ...prev, gstNumber: newValue, gstStateCode: detectedCode }));
+          setErrors(prev => ({ ...prev, [name]: '' }));
+          return;
+        }
+      }
     }
 
     setFormData(prev => ({ ...prev, [name]: newValue }));
@@ -195,10 +229,28 @@ export default function VendorModal({ isOpen, onClose, onSave, vendor }: VendorM
             {errors.email && <span className="error-text">{errors.email}</span>}
           </div>
 
-          <div className="input-group">
-            <label className="input-label">GST Number</label>
-            <input type="text" name="gstNumber" className={`input-field ${errors.gstNumber ? 'input-field-error' : ''}`} value={formData.gstNumber} onChange={handleChange} maxLength={15} />
-            {errors.gstNumber && <span className="error-text">{errors.gstNumber}</span>}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div className="input-group">
+              <label className="input-label">GST State Code</label>
+              <select
+                name="gstStateCode"
+                className="input-field"
+                value={formData.gstStateCode}
+                onChange={handleStateCodeChange}
+              >
+                {GST_STATE_CODES.map(s => (
+                  <option key={s.code} value={s.code}>
+                    {s.code} - {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="input-group">
+              <label className="input-label">GST Number</label>
+              <input type="text" name="gstNumber" className={`input-field ${errors.gstNumber ? 'input-field-error' : ''}`} value={formData.gstNumber} onChange={handleChange} maxLength={15} />
+              {errors.gstNumber && <span className="error-text">{errors.gstNumber}</span>}
+            </div>
           </div>
 
           <div className="input-group">

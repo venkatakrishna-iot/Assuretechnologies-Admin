@@ -15,7 +15,8 @@ export const mapApiOrderToOrder = (
   items: any[], 
   totalAmount: number, 
   mapItemVendorName: (i: any) => string,
-  extraTransportData?: { transportName?: string; trackingId?: string; trackUrl?: string }
+  extraTransportData?: { transportName?: string; trackingId?: string; trackUrl?: string },
+  extraGstData?: { subtotalAmount?: number; taxAmount?: number; gstStateCode?: string }
 ): Order => {
   // Determine effective status from the specific items in this order slice
   let effectiveStatus = o.status;
@@ -47,6 +48,9 @@ export const mapApiOrderToOrder = (
     address: cleanAddress(o.customer_address),
     companyName: o.company_name || undefined,
     gstNumber: o.gst_number || undefined,
+    gstStateCode: extraGstData?.gstStateCode || o.gst_state_code || undefined,
+    subtotalAmount: extraGstData?.subtotalAmount !== undefined ? extraGstData.subtotalAmount : (parseFloat(o.subtotal_amount) || totalAmount),
+    taxAmount: extraGstData?.taxAmount !== undefined ? extraGstData.taxAmount : (parseFloat(o.tax_amount) || 0),
     pincode: o.customer?.pincode || 'N/A',
     totalAmount: totalAmount,
     paymentMethod: o.payment_method ? (o.payment_method === 'UPI' ? 'UPI / QR Code' : o.payment_method === 'CARD' ? 'Credit / Debit Card' : o.payment_method) : 'Online',
@@ -63,18 +67,31 @@ export const mapApiOrderToOrder = (
     transportName: extraTransportData !== undefined ? extraTransportData.transportName : (itemTracking?.transport_name || undefined),
     trackingId: extraTransportData !== undefined ? extraTransportData.trackingId : (itemTracking?.tracking_id || undefined),
     trackUrl: extraTransportData !== undefined ? extraTransportData.trackUrl : (itemTracking?.tracking_url || undefined),
-    items: items.map((i: any) => ({
-      id: i.id,
-      productName: i.product?.name || 'Unknown',
-      vendorName: mapItemVendorName(i),
-      vendorId: i.vendor_id,
-      status: i.status,
-      trackingId: i.tracking_id,
-      transportName: i.transport_name,
-      trackUrl: i.tracking_url,
-      price: parseFloat(i.price) || 0,
-      qty: parseInt(i.qty, 10) || 0,
-      subtotal: parseFloat(i.subtotal) || 0
-    }))
+    items: items.map((i: any) => {
+      const price = parseFloat(i.price) || 0;
+      const qty = parseInt(i.qty, 10) || 0;
+      const taxSlab = i.tax_slab != null ? Number(i.tax_slab) : 18;
+      const taxableBase = parseFloat(i.subtotal) || parseFloat((price * qty / (1 + (taxSlab / 100))).toFixed(2));
+      const taxAmount = parseFloat(i.tax_amount) || parseFloat((price * qty - taxableBase).toFixed(2));
+      const itemTotal = parseFloat((price * qty).toFixed(2));
+
+      return {
+        id: i.id,
+        productName: i.product?.name || 'Unknown',
+        vendorName: mapItemVendorName(i),
+        vendorId: i.vendor_id,
+        status: i.status,
+        trackingId: i.tracking_id,
+        transportName: i.transport_name,
+        trackUrl: i.tracking_url,
+        price,
+        qty,
+        subtotal: taxableBase,
+        taxSlab,
+        taxAmount,
+        taxableBase,
+        itemTotal
+      };
+    })
   };
 };

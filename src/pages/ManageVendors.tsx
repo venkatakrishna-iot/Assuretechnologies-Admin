@@ -44,6 +44,7 @@ export default function ManageVendors() {
           mobile: v.mobile,
           email: v.email,
           gstNumber: v.gst_number,
+          gstStateCode: v.gst_state_code || (v.gst_number ? v.gst_number.slice(0, 2) : '37'),
           fullAddress: v.address,
           pincode: v.pincode || '',
           businessDescription: v.business_description || '',
@@ -86,6 +87,7 @@ export default function ManageVendors() {
         formData.append('business_name', vendorData.businessName || '');
         formData.append('address', vendorData.fullAddress || '');
         formData.append('gst_number', vendorData.gstNumber || '');
+        formData.append('gst_state_code', (vendorData as any).gstStateCode || (vendorData.gstNumber ? vendorData.gstNumber.slice(0, 2) : '37'));
         formData.append('pincode', vendorData.pincode || '');
         if (vendorData.businessDescription) formData.append('business_description', vendorData.businessDescription);
         if (vendorData.bankAccountDetails) formData.append('bank_account_details', vendorData.bankAccountDetails);

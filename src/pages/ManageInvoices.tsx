@@ -4,6 +4,7 @@ import { MdClose, MdVisibility, MdDownload } from 'react-icons/md';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import type { Invoice, InvoiceItem } from '../types';
+import { isSameStateAsCompany, getGstStateCode } from '../data/gstStateCodes';
 import './ManageInvoices.css';
 import { Toast } from '../utils/errorHandler';
 
@@ -52,6 +53,21 @@ export default function ManageInvoices() {
 
   const fetchInvoices = async () => {
     try {
+      const vendorMap: Record<string, string> = {};
+      try {
+        const vRes = await API.get('/admin/vendors?limit=200');
+        if (vRes.data?.data && Array.isArray(vRes.data.data)) {
+          vRes.data.data.forEach((v: any) => {
+            if (v.gst_number) {
+              if (v.id) vendorMap[v.id] = v.gst_number;
+              if (v.business_name) vendorMap[v.business_name.toLowerCase().trim()] = v.gst_number;
+              if (v.full_name) vendorMap[v.full_name.toLowerCase().trim()] = v.gst_number;
+            }
+          });
+        }
+      } catch (e) {
+        console.error('Failed to pre-fetch vendors for GST lookup', e);
+      }
       const response = await API.get('/invoices/admin');
       const fetchedInvoices = response.data.data.map((inv: any) => ({
         id: inv.id,
@@ -97,6 +113,10 @@ export default function ManageInvoices() {
               || 'Service'),
         soldBy: inv.sold_by || inv.vendor?.business_name || inv.vendor?.full_name || (inv.type === 'VENDOR' ? 'Assure Technologies' : '-'),
         vendorBusinessName: inv.vendor?.business_name || inv.vendor?.full_name || '',
+        vendorGstin: inv.vendor?.gst_number || inv.vendor_gstin || (inv.vendor_id ? vendorMap[inv.vendor_id] : '') || vendorMap[((inv.vendor?.business_name || inv.vendor?.full_name || inv.sold_by || '').toLowerCase().trim())] || '',
+        vendorGstStateCode: inv.vendor_gst_state_code || inv.vendor?.gst_state_code || (inv.vendor?.gst_number ? inv.vendor.gst_number.slice(0, 2) : '') || '',
+        customerGstin: inv.gst_number || inv.customer?.gst_number || '',
+        gstStateCode: inv.gst_state_code || (inv.gst_number ? inv.gst_number.slice(0, 2) : ''),
         orderId: inv.order_id,
         type: inv.type
       }));
@@ -333,12 +353,32 @@ export default function ManageInvoices() {
                   invoices.filter(inv => activeTab === 'vendor_invoices' ? (inv.type === 'VENDOR' || !!inv.vendorBusinessName) : (inv.type === 'SERVICE' || !inv.vendorBusinessName)).map(inv => (
                     <tr key={inv.id}>
                       <td><strong>{inv.invoiceNumber}</strong></td>
-                      <td>{inv.customerName}</td>
-                      <td>{inv.soldBy || inv.vendorBusinessName || 'Assure Technologies'}</td>
+                      <td>
+                        {activeTab === 'vendor_invoices' || inv.type === 'VENDOR' || !!inv.vendorBusinessName ? (
+                          <div>
+                            <div>Assure Technologies</div>
+                            <small className="text-muted" style={{ color: '#6c757d', fontSize: '0.8rem' }}>GSTIN: 37DJPPN2516B1Z9</small>
+                          </div>
+                        ) : (
+                          inv.customerName
+                        )}
+                      </td>
+                      <td>
+                        <div>{inv.soldBy || inv.vendorBusinessName || 'Assure Technologies'}</div>
+                        {(activeTab === 'vendor_invoices' || inv.type === 'VENDOR' || !!inv.vendorBusinessName) && inv.vendorGstin && (
+                          <small className="text-muted" style={{ color: '#6c757d', fontSize: '0.8rem' }}>
+                            GSTIN: {inv.vendorGstin}
+                          </small>
+                        )}
+                      </td>
                       <td>{inv.serviceName}</td>
                       {activeTab === 'service_invoices' && <td>{inv.srNo || '-'}</td>}
                       <td>{inv.orderId || '-'}</td>
-                      <td>{inv.grandTotal.toFixed(2)}</td>
+                      <td>
+                        {inv.grandTotal > 0
+                          ? inv.grandTotal.toFixed(2)
+                          : (inv.items?.reduce((sum, item) => sum + item.amount, 0) || 0).toFixed(2)}
+                      </td>
                       <td>{inv.status}</td>
                       <td>{inv.date}</td>
                       <td style={{ textAlign: 'center', display: 'flex', gap: '8px', justifyContent: 'center' }}>
@@ -553,7 +593,7 @@ export default function ManageInvoices() {
                   className="btn-remove-row"
                   style={{ width: 'auto', padding: '4px 12px', fontSize: '0.85rem' }}
                   onClick={() => {
-                    setActiveTab(viewingInvoice.vendorBusinessName ? 'vendor_invoices' : 'service_invoices');
+                    setActiveTab(viewingInvoice.vendorBusinessName || viewingInvoice.type === 'VENDOR' ? 'vendor_invoices' : 'service_invoices');
                     setViewingInvoice(null);
                   }}
                 >
@@ -566,8 +606,22 @@ export default function ManageInvoices() {
               <div><strong>Invoice No:</strong> {viewingInvoice.invoiceNumber}</div>
               <div><strong>Date:</strong> {viewingInvoice.date}</div>
               {viewingInvoice.srNo && <div><strong>SR No:</strong> {viewingInvoice.srNo}</div>}
-              <div><strong>Customer:</strong> {viewingInvoice.customerName}</div>
-              <div><strong>Sold By:</strong> {viewingInvoice.soldBy || viewingInvoice.vendorBusinessName || 'Assure Technologies'}</div>
+              <div>
+                <strong>Customer:</strong> {viewingInvoice.type === 'VENDOR' || viewingInvoice.vendorBusinessName ? 'Assure Technologies' : viewingInvoice.customerName}
+                {(viewingInvoice.type === 'VENDOR' || viewingInvoice.vendorBusinessName) && (
+                  <div style={{ marginTop: '4px' }}>
+                    <strong>GSTIN:</strong> 37DJPPN2516B1Z9
+                  </div>
+                )}
+              </div>
+              <div>
+                <strong>Sold By:</strong> {viewingInvoice.soldBy || viewingInvoice.vendorBusinessName || 'Assure Technologies'}
+                {(viewingInvoice.type === 'VENDOR' || viewingInvoice.vendorBusinessName) && viewingInvoice.vendorGstin && (
+                  <div style={{ marginTop: '4px' }}>
+                    <strong>GSTIN:</strong> {viewingInvoice.vendorGstin}
+                  </div>
+                )}
+              </div>
               <div><strong>Order ID:</strong> {viewingInvoice.orderId || 'N/A'}</div>
               <div><strong>Mobile:</strong> {viewingInvoice.mobile}</div>
               <div><strong>Email:</strong> {viewingInvoice.email || 'N/A'}</div>
@@ -583,42 +637,91 @@ export default function ManageInvoices() {
                   <tr>
                     <th className="col-num">S.No</th>
                     <th className="col-name">Description</th>
-                    
                     <th className="col-qty">Qty</th>
-                    <th className="col-cost">Rate</th>
+                    <th className="col-cost">Rate (Incl. of Tax)</th>
+                    <th className="col-cost">Rate (Excl. of Tax)</th>
                     <th className="col-total">Amount</th>
                     <th>Warranty</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {viewingInvoice.items.map((item, idx) => (
-                    <tr key={item.id}>
-                      <td className="col-num">{idx + 1}</td>
-                      <td>
-                        <div>{item.description}</div>
-                        
-                      </td>
-                      
-                      <td>{item.qty}</td>
-                      <td>{item.rate.toFixed(2)}</td>
-                      <td>{item.amount.toFixed(2)}</td>
-                      <td>{item.warranty || '-'}</td>
-                    </tr>
-                  ))}
+                  {viewingInvoice.items.map((item, idx) => {
+                    const gstPct = viewingInvoice.gstPercent || 18;
+                    const qty = item.qty || 1;
+                    const rateExcl = (item.amount && item.amount < (item.rate * qty))
+                      ? (item.amount / qty)
+                      : item.rate;
+                    const rateIncl = (item.rate > rateExcl)
+                      ? item.rate
+                      : (rateExcl * (1 + (gstPct / 100)));
+                    const amount = item.amount || (rateExcl * qty);
+
+                    return (
+                      <tr key={item.id}>
+                        <td className="col-num">{idx + 1}</td>
+                        <td>
+                          <div>{item.description}</div>
+                        </td>
+                        <td>{qty}</td>
+                        <td style={{ fontWeight: 600, color: '#0f766e' }}>₹{rateIncl.toFixed(2)}</td>
+                        <td>₹{rateExcl.toFixed(2)}</td>
+                        <td style={{ fontWeight: 600 }}>₹{amount.toFixed(2)}</td>
+                        <td>{item.warranty || '-'}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
 
             {(() => {
               const itemsTotal = viewingInvoice.items.reduce((sum, item) => sum + item.amount, 0);
+              const isVendorInvoice = viewingInvoice.type === 'VENDOR' || !!viewingInvoice.vendorBusinessName;
+
+              if (isVendorInvoice) {
+                const total = viewingInvoice.grandTotal > 0 ? viewingInvoice.grandTotal : itemsTotal;
+                const gstPercent = viewingInvoice.gstPercent || 18;
+                const gst = viewingInvoice.grandTotal > itemsTotal && itemsTotal > 0
+                  ? (viewingInvoice.grandTotal - itemsTotal)
+                  : (total - (total / (1 + (gstPercent / 100))));
+                const taxable = total - gst;
+                const vendorCode = viewingInvoice.vendorGstStateCode || (viewingInvoice.vendorGstin ? viewingInvoice.vendorGstin.slice(0, 2) : '');
+                const isIntraState = isSameStateAsCompany(vendorCode);
+
+                return (
+                  <div style={{ marginTop: '20px', padding: '15px', background: '#e9ecef', borderRadius: '4px', textAlign: 'right' }}>
+                    <p style={{ margin: '0 0 6px 0', fontSize: '0.95rem' }}><strong>Subtotal (Taxable):</strong> ₹{taxable.toFixed(2)}</p>
+                    {isIntraState ? (
+                      <>
+                        <p style={{ margin: '0 0 6px 0', fontSize: '0.95rem' }}><strong>CGST:</strong> ₹{(gst / 2).toFixed(2)}</p>
+                        <p style={{ margin: '0 0 6px 0', fontSize: '0.95rem' }}><strong>SGST:</strong> ₹{(gst / 2).toFixed(2)}</p>
+                      </>
+                    ) : (
+                      <p style={{ margin: '0 0 6px 0', fontSize: '0.95rem' }}><strong>IGST:</strong> ₹{gst.toFixed(2)}</p>
+                    )}
+                    <h4 style={{ margin: '6px 0 0 0', fontSize: '1.15rem' }}><strong>Total:</strong> ₹{total.toFixed(2)}</h4>
+                  </div>
+                );
+              }
+
               const totalBeforeGst = itemsTotal + viewingInvoice.additionalCharges;
               const gstAmount = (totalBeforeGst * viewingInvoice.gstPercent) / 100;
+              const customerCode = viewingInvoice.gstStateCode || (viewingInvoice.customerGstin ? viewingInvoice.customerGstin.slice(0, 2) : '') || getGstStateCode(viewingInvoice.address);
+              const isServiceIntraState = isSameStateAsCompany(customerCode);
+
               return (
                 <div style={{ marginTop: '20px', padding: '15px', background: '#e9ecef', borderRadius: '4px', textAlign: 'right' }}>
-                  <p><strong>Items Total:</strong> {itemsTotal.toFixed(2)}</p>
-                  <p><strong>Additional Charges {viewingInvoice.additionalChargesDesc ? `(${viewingInvoice.additionalChargesDesc})` : ''}:</strong> {viewingInvoice.additionalCharges.toFixed(2)}</p>
-                  <p><strong>GST ({viewingInvoice.gstPercent}%):</strong> {gstAmount.toFixed(2)}</p>
-                  <h4><strong>Grand Total:</strong> {viewingInvoice.grandTotal.toFixed(2)}</h4>
+                  <p><strong>Items Total:</strong> ₹{itemsTotal.toFixed(2)}</p>
+                  <p><strong>Additional Charges {viewingInvoice.additionalChargesDesc ? `(${viewingInvoice.additionalChargesDesc})` : ''}:</strong> ₹{viewingInvoice.additionalCharges.toFixed(2)}</p>
+                  {isServiceIntraState ? (
+                    <>
+                      <p><strong>CGST:</strong> ₹{(gstAmount / 2).toFixed(2)}</p>
+                      <p><strong>SGST:</strong> ₹{(gstAmount / 2).toFixed(2)}</p>
+                    </>
+                  ) : (
+                    <p><strong>IGST:</strong> ₹{gstAmount.toFixed(2)}</p>
+                  )}
+                  <h4><strong>Grand Total:</strong> ₹{viewingInvoice.grandTotal.toFixed(2)}</h4>
                 </div>
               );
             })()}

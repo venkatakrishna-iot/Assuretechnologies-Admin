@@ -6,6 +6,7 @@ export interface Product {
   category: string;
   price: string;
   discount?: string | number;
+  tax_slab?: number;
   admin_commission?: string | number;
   banner: string | File;
   bannerName: string;
@@ -67,6 +68,7 @@ export interface Vendor {
   password?: string;
   businessName?: string;
   gstNumber?: string;
+  gstStateCode?: string;
   fullAddress?: string;
   pincode?: string;
   businessDescription?: string;
@@ -112,6 +114,10 @@ export interface OrderItem {
   price: number;
   qty: number;
   subtotal: number;
+  taxSlab?: number;
+  taxAmount?: number;
+  taxableBase?: number;
+  itemTotal?: number;
   status?: string;
   trackingId?: string;
   transportName?: string;
@@ -129,6 +135,9 @@ export interface Order {
   email: string;
   companyName?: string;
   gstNumber?: string;
+  gstStateCode?: string;
+  subtotalAmount?: number;
+  taxAmount?: number;
   address: string;
   pincode: string;
   totalAmount: number;
@@ -247,6 +256,10 @@ export interface Invoice {
   serviceName?: string;
   vendorBusinessName?: string;
   soldBy?: string;
+  vendorGstin?: string;
+  vendorGstStateCode?: string;
+  customerGstin?: string;
+  gstStateCode?: string;
   orderId?: string;
   type?: string;
 }

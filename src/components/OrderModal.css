@@ -17,7 +17,7 @@
   background: white;
   border-radius: 12px;
   width: 90%;
-  max-width: 800px;
+  max-width: 960px;
   max-height: calc(100vh - 80px);
   display: flex;
   flex-direction: column;
