@@ -3,6 +3,9 @@ import { createPortal } from 'react-dom';
 import type { PartnerBooking, DronePartner } from '../types';
 import './ServiceRequestDetailsModal.css';
 import { usePartnerContext } from '../context/PartnerContext';
+import API from '../services/api';
+import { Toast } from '../utils/errorHandler';
+import { MdDownload } from 'react-icons/md';
 
 interface PartnerBookingDetailsModalProps {
   booking: PartnerBooking;
@@ -19,6 +22,29 @@ export default function PartnerBookingDetailsModal({ booking, partner, onClose }
     setMounted(true);
     return () => setMounted(false);
   }, []);
+
+  const handleDownloadCommission = async () => {
+    const bookingId = booking.displayId || booking.id;
+    try {
+      Toast.fire({ icon: 'info', title: 'Downloading B2B Commission Invoice...' });
+      const res = await API.get(`/invoices/service/${encodeURIComponent(bookingId)}/commission-invoice/download`, {
+        responseType: 'blob'
+      });
+      const blob = new Blob([res.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Commission-Invoice-${bookingId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      Toast.fire({ icon: 'success', title: 'Commission invoice downloaded successfully' });
+    } catch (err: any) {
+      console.error('Failed to download commission invoice:', err);
+      Toast.fire({ icon: 'error', title: err.response?.data?.message || 'Failed to download commission invoice' });
+    }
+  };
 
   if (!mounted) return null;
 
@@ -88,6 +114,33 @@ export default function PartnerBookingDetailsModal({ booking, partner, onClose }
             </div>
             <div className="details-row">
               <strong>Scheduled Time:</strong> {booking.time}
+            </div>
+          </div>
+
+          <div className="details-card" style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+            <span style={{ fontWeight: 600, color: '#0f172a' }}>Financial & Payout Split</span><br/><br/>
+            <div className="details-row">
+              <strong>Farmer / Customer Paid:</strong> ₹{Number(booking.totalAmount || 0).toLocaleString('en-IN')} <span style={{ color: '#166534', fontSize: '12px' }}>(0% GST - Exempt)</span>
+            </div>
+            <div className="details-row mt-2" style={{ color: '#2563eb' }}>
+              <strong>Partner Payout:</strong>
+              <span style={{ fontWeight: 700, fontSize: '15px', marginLeft: '6px' }}>
+                ₹{Number(booking.partnerPayoutAmount ?? Math.round(Number(booking.totalAmount || 0) * 0.90)).toLocaleString('en-IN')}
+              </span>
+            </div>
+            <div className="details-row mt-2" style={{ borderTop: '1px dashed #cbd5e1', paddingTop: '8px' }}>
+              <strong>Platform Gross Commission ({booking.adminCommissionRate ?? 10}%):</strong>
+              <span style={{ color: '#166534', fontWeight: 600, marginLeft: '6px' }}>
+                ₹{Number(booking.adminCommissionAmount ?? Math.round(Number(booking.totalAmount || 0) * 0.10)).toLocaleString('en-IN')}
+              </span>
+            </div>
+            <div className="details-row mt-1" style={{ fontSize: '13px', color: '#64748b' }}>
+              <span>• Net Platform Revenue:</span>
+              <span style={{ marginLeft: '6px' }}>₹{(Number(booking.adminCommissionAmount ?? Math.round(Number(booking.totalAmount || 0) * 0.10)) / 1.18).toFixed(2)}</span>
+            </div>
+            <div className="details-row mt-1" style={{ fontSize: '13px', color: '#64748b' }}>
+              <span>• 18% GST to Deposit (Paid by Assure):</span>
+              <span style={{ marginLeft: '6px' }}>₹{(Number(booking.adminCommissionAmount ?? Math.round(Number(booking.totalAmount || 0) * 0.10)) - (Number(booking.adminCommissionAmount ?? Math.round(Number(booking.totalAmount || 0) * 0.10)) / 1.18)).toFixed(2)}</span>
             </div>
           </div>
 
@@ -183,7 +236,18 @@ export default function PartnerBookingDetailsModal({ booking, partner, onClose }
           )}
         </div>
 
-        <div className="details-footer">
+        <div className="details-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            {booking.status === 'Completed' && (
+              <button
+                className="btn-action-green"
+                onClick={handleDownloadCommission}
+                style={{ backgroundColor: '#10b981', color: '#fff', padding: '6px 14px', borderRadius: '4px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.9rem' }}
+              >
+                <MdDownload /> Download Commission Invoice
+              </button>
+            )}
+          </div>
           <button className="btn-close-gray" onClick={onClose}>
             Close
           </button>

@@ -249,6 +249,32 @@ export default function ManageInvoices() {
     }
   };
 
+  const handleDownloadCommissionPDF = async (bookingId: string) => {
+    if (!bookingId) {
+      Toast.fire({ icon: 'warning', title: 'Booking ID not found for this invoice' });
+      return;
+    }
+    try {
+      Toast.fire({ icon: 'info', title: 'Downloading B2B Commission Invoice...' });
+      const res = await API.get(`/invoices/service/${encodeURIComponent(bookingId)}/commission-invoice/download`, {
+        responseType: 'blob'
+      });
+      const blob = new Blob([res.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Commission-Invoice-${bookingId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      Toast.fire({ icon: 'success', title: 'Commission invoice downloaded successfully' });
+    } catch (err: any) {
+      console.error('Failed to download commission invoice:', err);
+      Toast.fire({ icon: 'error', title: err.response?.data?.message || 'Commission invoice only available for Partner services' });
+    }
+  };
+
   const handleDownloadPDF = async (invoiceNumber: string) => {
     const input = document.getElementById('invoice-details-pdf');
     if (!input) return;
@@ -366,6 +392,16 @@ export default function ManageInvoices() {
                         >
                           <MdDownload /> Download
                         </button>
+                        {activeTab === 'service_invoices' && (
+                          <button
+                            className="btn-action-green"
+                            onClick={() => handleDownloadCommissionPDF(inv.orderId || inv.srNo || '')}
+                            title="Download B2B Commission Invoice for Partner & Tax Filing"
+                            style={{ padding: '4px 8px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: '#10b981' }}
+                          >
+                            <MdDownload /> Commission Inv
+                          </button>
+                        )}
                         <button
                           className="btn-remove-row"
                           onClick={() => handleDeleteInvoice(inv.id)}
