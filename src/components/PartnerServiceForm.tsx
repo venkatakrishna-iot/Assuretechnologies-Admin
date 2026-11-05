@@ -273,16 +273,24 @@ export default function PartnerServiceForm({ onSaveService, onCancel, initialDat
                 💡 Live Commission & Payout Preview (Per Unit):
               </h4>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '5px' }}>
-                <span style={{ color: '#4b5563' }}>User Amount (Customer / Farmer Pays):</span>
-                <strong style={{ color: '#111827' }}>₹{Number(rate).toLocaleString('en-IN')} (0% GST)</strong>
+                <span style={{ color: '#4b5563' }}>Farmer / Customer Amount:</span>
+                <strong style={{ color: '#111827' }}>₹{Number(rate).toLocaleString('en-IN')} (0% GST - Exempt)</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '5px' }}>
-                <span style={{ color: '#166534' }}>Admin Commission ({adminCommissionRate}%):</span>
-                <strong style={{ color: '#166534' }}>+₹{Math.round(Number(rate) * (adminCommissionRate / 100)).toLocaleString('en-IN')} (Platform Profit)</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', paddingTop: '6px', borderTop: '1px dashed #bbf7d0' }}>
                 <span style={{ color: '#2563eb', fontWeight: 600 }}>Partner Payout ({100 - adminCommissionRate}%):</span>
                 <strong style={{ color: '#2563eb' }}>₹{(Number(rate) - Math.round(Number(rate) * (adminCommissionRate / 100))).toLocaleString('en-IN')}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '5px', paddingTop: '6px', borderTop: '1px dashed #bbf7d0' }}>
+                <span style={{ color: '#166534', fontWeight: 600 }}>Platform Gross Commission ({adminCommissionRate}%):</span>
+                <strong style={{ color: '#166534' }}>+₹{Math.round(Number(rate) * (adminCommissionRate / 100)).toLocaleString('en-IN')}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', paddingLeft: '12px', color: '#64748b' }}>
+                <span>• Net Platform Revenue:</span>
+                <span>₹{(Math.round(Number(rate) * (adminCommissionRate / 100)) / 1.18).toFixed(2)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', paddingLeft: '12px', color: '#64748b' }}>
+                <span>• 18% GST to Deposit (Paid by Assure):</span>
+                <span>₹{(Math.round(Number(rate) * (adminCommissionRate / 100)) - (Math.round(Number(rate) * (adminCommissionRate / 100)) / 1.18)).toFixed(2)}</span>
               </div>
             </div>
           )}

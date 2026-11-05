@@ -344,6 +344,9 @@ export interface PartnerBooking {
   pricingTypeId?: string;
   quantity?: number;
   totalAmount: number;
+  adminCommissionRate?: number;
+  adminCommissionAmount?: number;
+  partnerPayoutAmount?: number;
   startWorkPhotos?: string[];
   completeWorkPhotos?: string[];
   progressUpdates?: ProgressUpdate[];

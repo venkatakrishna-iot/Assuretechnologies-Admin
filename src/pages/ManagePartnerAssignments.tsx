@@ -50,6 +50,9 @@ const mapPartnerBooking = (b: any): PartnerBooking => {
     status: b.status,
     partnerId: b.assigned_partner_id,
     totalAmount: b.Order?.total_amount || 0,
+    adminCommissionRate: b.metadata?.admin_commission_rate ?? b.Service?.admin_commission_rate,
+    adminCommissionAmount: b.metadata?.admin_commission_amount,
+    partnerPayoutAmount: b.metadata?.partner_payout_amount,
   };
 };
 
