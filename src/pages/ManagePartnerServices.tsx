@@ -95,6 +95,9 @@ export default function ManagePartnerServices() {
       formData.append('name', serviceData.serviceName);
       formData.append('pricing_type_id', serviceData.pricingTypeId);
       formData.append('price', String(serviceData.rate));
+      if ((serviceData as any).admin_commission_rate !== undefined) {
+        formData.append('admin_commission_rate', String((serviceData as any).admin_commission_rate));
+      }
       
       if (serviceData.required_partner_type_id) {
         formData.append('required_partner_type_id', serviceData.required_partner_type_id);

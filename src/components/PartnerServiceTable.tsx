@@ -33,6 +33,7 @@ export default function PartnerServiceTable({
               <th>Category</th>
               <th>Service Name</th>
               <th>Pricing</th>
+              <th>Commission</th>
               <th>Image</th>
               <th>Actions</th>
             </tr>
@@ -56,6 +57,11 @@ export default function PartnerServiceTable({
                     <div className="product-price">
                       <span>₹ {service.price !== undefined ? service.price : service.rate} / {service.pricingType?.label || 'Unknown Unit'}</span>
                     </div>
+                  </td>
+                  <td>
+                    <span style={{ fontWeight: 600, color: '#166534', background: '#dcfce7', padding: '3px 8px', borderRadius: '4px', fontSize: '13px' }}>
+                      {(service as any).admin_commission_rate !== undefined ? `${(service as any).admin_commission_rate}%` : '10%'}
+                    </span>
                   </td>
                 <td>
                   <div className="product-banner" title={service.name || service.serviceName}>

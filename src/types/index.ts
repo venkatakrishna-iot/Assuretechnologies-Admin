@@ -288,6 +288,8 @@ export interface PartnerService {
   required_partner_type_id?: string;
   rate: number;
   price?: number; // from backend response
+
+  admin_commission_rate?: number;
   image?: string | File;
   imageName?: string;
   customFields?: CustomField[]; // fields required during booking this service

@@ -27,6 +27,7 @@ export default function PartnerServiceForm({ onSaveService, onCancel, initialDat
   const [pricingTypeId, setPricingTypeId] = useState<string>((initialData as any)?.pricing_type_id || (initialData as any)?.pricing_type?.id || (initialData as any)?.pricingType?.id || initialData?.pricingTypeId || (pricingTypes.length > 0 ? pricingTypes[0].id : ''));
   const [required_partner_type_id, setRequiredPartnerTypeId] = useState<string>(initialData?.required_partner_type_id || (initialData as any)?.required_partner_type?.id || (initialData as any)?.requiredPartnerType?.id || '');
   const [rate, setRate] = useState<number | undefined>(initialData?.price !== undefined ? initialData.price : initialData?.rate);
+  const [adminCommissionRate, setAdminCommissionRate] = useState<number>((initialData as any)?.admin_commission_rate !== undefined ? Number((initialData as any).admin_commission_rate) : 10);
   const [categoryPartnerTypes, setCategoryPartnerTypes] = useState<{ id: string; name: string }[]>([]);
   const [isLoadingPartnerTypes, setIsLoadingPartnerTypes] = useState(false);
 
@@ -75,6 +76,7 @@ export default function PartnerServiceForm({ onSaveService, onCancel, initialDat
       setPricingTypeId((initialData as any).pricing_type_id || (initialData as any)?.pricing_type?.id || (initialData as any)?.pricingType?.id || initialData.pricingTypeId || (pricingTypes.length > 0 ? pricingTypes[0].id : ''));
       setRequiredPartnerTypeId(initialData.required_partner_type_id || (initialData as any)?.required_partner_type?.id || (initialData as any)?.requiredPartnerType?.id || '');
       setRate(initialData.price !== undefined ? initialData.price : initialData.rate);
+      setAdminCommissionRate((initialData as any)?.admin_commission_rate !== undefined ? Number((initialData as any).admin_commission_rate) : 10);
     } else {
       setCategoryId('');
       setServiceName('');
@@ -82,6 +84,7 @@ export default function PartnerServiceForm({ onSaveService, onCancel, initialDat
       setPricingTypeId(pricingTypes.length > 0 ? pricingTypes[0].id : '');
       setRequiredPartnerTypeId('');
       setRate(undefined);
+      setAdminCommissionRate(10);
     }
   }, [initialData, pricingTypes]);
 
@@ -97,6 +100,7 @@ export default function PartnerServiceForm({ onSaveService, onCancel, initialDat
       pricingTypeId,
       required_partner_type_id,
       rate: rate || 0,
+      admin_commission_rate: adminCommissionRate !== undefined ? adminCommissionRate : 10,
       customFields: customFields.map(cf => ({
         ...cf,
         options: cf.type === 'dropdown' ? (cf.options?.map(s => s.trim()).filter(s => s) || []) : undefined
@@ -229,18 +233,59 @@ export default function PartnerServiceForm({ onSaveService, onCancel, initialDat
           </div>
 
           <div className="input-group form-group">
-            <label className="input-label" htmlFor="rate">Rate (₹)</label>
+            <label className="input-label" htmlFor="rate">Rate / User Amount (₹)</label>
             <input
               type="number"
               id="rate"
               className="input-field colorful-input"
-              placeholder="e.g. 400"
+              placeholder="e.g. 2000"
               value={rate || ''}
               onChange={(e) => setRate(e.target.value ? Number(e.target.value) : undefined)}
               min="1"
               required
             />
           </div>
+
+          <div className="input-group form-group">
+            <label className="input-label" htmlFor="adminCommission">Admin Commission (%)</label>
+            <input
+              type="number"
+              id="adminCommission"
+              className="input-field colorful-input"
+              placeholder="e.g. 10"
+              value={adminCommissionRate}
+              onChange={(e) => setAdminCommissionRate(e.target.value ? Number(e.target.value) : 0)}
+              min="0"
+              max="100"
+              required
+            />
+          </div>
+
+          {(rate || 0) > 0 && (
+            <div style={{
+              background: '#f0fdf4',
+              border: '1px solid #bbf7d0',
+              borderRadius: '8px',
+              padding: '14px 16px',
+              marginBottom: '5px'
+            }}>
+              <h4 style={{ margin: '0 0 8px 0', fontSize: '13px', color: '#166534', fontWeight: 700 }}>
+                💡 Live Commission & Payout Preview (Per Unit):
+              </h4>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '5px' }}>
+                <span style={{ color: '#4b5563' }}>User Amount (Customer / Farmer Pays):</span>
+                <strong style={{ color: '#111827' }}>₹{Number(rate).toLocaleString('en-IN')} (0% GST)</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '5px' }}>
+                <span style={{ color: '#166534' }}>Admin Commission ({adminCommissionRate}%):</span>
+                <strong style={{ color: '#166534' }}>+₹{Math.round(Number(rate) * (adminCommissionRate / 100)).toLocaleString('en-IN')} (Platform Profit)</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', paddingTop: '6px', borderTop: '1px dashed #bbf7d0' }}>
+                <span style={{ color: '#2563eb', fontWeight: 600 }}>Partner Payout ({100 - adminCommissionRate}%):</span>
+                <strong style={{ color: '#2563eb' }}>₹{(Number(rate) - Math.round(Number(rate) * (adminCommissionRate / 100))).toLocaleString('en-IN')}</strong>
+              </div>
+            </div>
+          )}
 
           <div className="input-group form-group-full">
             <label className="input-label">Service Image</label>
