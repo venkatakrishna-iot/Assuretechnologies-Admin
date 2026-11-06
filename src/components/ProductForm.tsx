@@ -30,6 +30,7 @@ export default function ProductForm({ onAddProduct }: ProductFormProps) {
   const [category, setCategory] = useState('');
   const [price, setPrice] = useState('');
   const [discount, setDiscount] = useState('');
+  const [taxSlab, setTaxSlab] = useState('18');
   const [priceError, setPriceError] = useState('');
   const [description, setDescription] = useState('');
   const [bannerFile, setBannerFile] = useState<File | null>(null);
@@ -67,6 +68,7 @@ export default function ProductForm({ onAddProduct }: ProductFormProps) {
       category,
       price: `₹${parseFloat(price).toFixed(2)}`,
       discount: discount ? parseFloat(discount) : 0,
+      tax_slab: Number(taxSlab) || 18,
       description,
       banner: bannerFile || '',
       bannerName: bannerFile ? bannerFile.name : 'No image'
@@ -77,6 +79,7 @@ export default function ProductForm({ onAddProduct }: ProductFormProps) {
     setCategory('');
     setPrice('');
     setDiscount('');
+    setTaxSlab('18');
     setPriceError('');
     setDescription('');
     setBannerFile(null);
@@ -157,6 +160,60 @@ export default function ProductForm({ onAddProduct }: ProductFormProps) {
               onChange={handleDiscountChange}
             />
           </div>
+
+          <div className="input-group form-group">
+            <label className="input-label" htmlFor="taxSlab">GST Tax Slab</label>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <select
+                id="taxSlab"
+                className="input-field category-select colorful-input"
+                style={{ width: '100%', paddingRight: '40px' }}
+                value={taxSlab}
+                onChange={(e) => setTaxSlab(e.target.value)}
+              >
+                <option value="0">0% GST</option>
+                <option value="5">5% GST</option>
+                <option value="12">12% GST</option>
+                <option value="18">18% GST (Standard)</option>
+                <option value="28">28% GST</option>
+              </select>
+            </div>
+          </div>
+
+          {price && !isNaN(Number(price)) && Number(price) > 0 && (() => {
+            const base = parseFloat(price) || 0;
+            const disc = parseFloat(discount) || 0;
+            const slab = parseFloat(taxSlab) || 0;
+
+            const sellingPriceExclTax = base * (1 - (disc / 100));
+            const taxAmount = sellingPriceExclTax * (slab / 100);
+            const finalCustomerPrice = sellingPriceExclTax + taxAmount;
+            const originalPrice = base * (1 + (slab / 100));
+
+            return (
+              <div style={{ backgroundColor: '#f8fafc', padding: '12px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}>
+                <div style={{ fontWeight: 600, color: '#334155', marginBottom: '8px' }}>Pricing Breakdown</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span style={{ color: '#64748b' }}>Selling Price (Excl. Tax):</span>
+                  <span style={{ fontWeight: 500 }}>₹{sellingPriceExclTax.toFixed(2)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span style={{ color: '#64748b' }}>GST ({slab}%):</span>
+                  <span style={{ fontWeight: 500 }}>+₹{taxAmount.toFixed(2)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span style={{ color: '#0f766e', fontWeight: 600 }}>Final Customer Price (Frontend):</span>
+                  <span style={{ fontWeight: 'bold', color: '#0f766e' }}>₹{finalCustomerPrice.toFixed(2)}</span>
+                </div>
+                {disc > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#94a3b8' }}>Original Price (Frontend):</span>
+                    <span style={{ textDecoration: 'line-through', color: '#94a3b8' }}>₹{originalPrice.toFixed(2)}</span>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           <div className="input-group form-group">
             <label className="input-label">Banner Image</label>

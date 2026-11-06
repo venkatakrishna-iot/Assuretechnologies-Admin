@@ -55,6 +55,7 @@ export default function ProductTable({ products, onEditProduct, onDeleteProduct,
               <th>Category</th>
               <th>Banner</th>
               <th>Price</th>
+              <th>GST Slab</th>
               <th>Status</th>
               <th>Action</th>
             </tr>
@@ -81,6 +82,11 @@ export default function ProductTable({ products, onEditProduct, onDeleteProduct,
                   <ImageCell image={product.banner} alt={product.bannerName || 'Product'} />
                 </td>
                 <td className="product-price">{product.price}</td>
+                <td>
+                  <span style={{ fontSize: '0.82rem', background: '#f1f5f9', padding: '3px 8px', borderRadius: '4px', fontWeight: 600, color: '#334155' }}>
+                    {product.tax_slab != null ? `${product.tax_slab}%` : '18%'}
+                  </span>
+                </td>
                 <td>
                   <span className={`product-status-badge ${product.status === 'In Stock' || product.status === 'Active' ? 'product-status-success' : 'product-status-warning'}`}>
                     {product.status}

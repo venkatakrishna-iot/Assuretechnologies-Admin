@@ -37,17 +37,24 @@ export default function ManageVendorOrders() {
 
           Object.values(itemsByVendorMap).forEach((vItems: any) => {
             const itemWithTracking = vItems.find((i: any) => i.tracking_id);
-            const vendorTotal = vItems.reduce((sum: number, i: any) => sum + (parseFloat(i.subtotal) || 0), 0);
+            const vendorTotal = vItems.reduce((sum: number, i: any) => sum + ((parseFloat(i.price) || 0) * (parseInt(i.qty, 10) || 1)), 0);
+            const vendorSubtotal = vItems.reduce((sum: number, i: any) => sum + (parseFloat(i.subtotal) || 0), 0);
+            const vendorTax = vItems.reduce((sum: number, i: any) => sum + (parseFloat(i.tax_amount) || 0), 0);
 
             vendorOrdersFetched.push(mapApiOrderToOrder(
               o, 
               vItems, 
-              vendorTotal, 
+              parseFloat(vendorTotal.toFixed(2)), 
               (i: any) => i.vendor?.business_name || i.vendor?.full_name || 'Vendor Product',
               {
                 transportName: itemWithTracking?.transport_name,
                 trackingId: itemWithTracking?.tracking_id,
                 trackUrl: itemWithTracking?.tracking_url
+              },
+              {
+                subtotalAmount: parseFloat(vendorSubtotal.toFixed(2)),
+                taxAmount: parseFloat(vendorTax.toFixed(2)),
+                gstStateCode: o.gst_state_code
               }
             ));
           });

@@ -34,8 +34,22 @@ export default function ManageOrders() {
         // Admin orders strictly only include items assigned to the main platform (vendor_id is null)
         const adminItems = (o.items || []).filter((i: any) => !i.vendor_id);
         if (adminItems.length > 0) {
-          const adminTotal = adminItems.reduce((sum: number, i: any) => sum + (parseFloat(i.subtotal) || 0), 0);
-          adminOrders.push(mapApiOrderToOrder(o, adminItems, adminTotal, () => 'Admin Product'));
+          const adminTotal = adminItems.reduce((sum: number, i: any) => sum + ((parseFloat(i.price) || 0) * (parseInt(i.qty, 10) || 1)), 0);
+          const adminSubtotal = adminItems.reduce((sum: number, i: any) => sum + (parseFloat(i.subtotal) || 0), 0);
+          const adminTax = adminItems.reduce((sum: number, i: any) => sum + (parseFloat(i.tax_amount) || 0), 0);
+
+          adminOrders.push(mapApiOrderToOrder(
+            o, 
+            adminItems, 
+            parseFloat(adminTotal.toFixed(2)), 
+            () => 'Admin Product',
+            undefined,
+            {
+              subtotalAmount: parseFloat(adminSubtotal.toFixed(2)),
+              taxAmount: parseFloat(adminTax.toFixed(2)),
+              gstStateCode: o.gst_state_code
+            }
+          ));
         }
       });
 
