@@ -249,6 +249,7 @@ export interface Invoice {
   soldBy?: string;
   orderId?: string;
   type?: string;
+  isPartner?: boolean;
 }
 
 export interface PartnerCustomField {

@@ -98,7 +98,8 @@ export default function ManageInvoices() {
         soldBy: inv.sold_by || inv.vendor?.business_name || inv.vendor?.full_name || (inv.type === 'VENDOR' ? 'Assure Technologies' : '-'),
         vendorBusinessName: inv.vendor?.business_name || inv.vendor?.full_name || '',
         orderId: inv.order_id,
-        type: inv.type
+        type: inv.type,
+        isPartner: Boolean(inv.is_partner || (inv.service_name && (inv.service_name.toLowerCase().includes('harvester') || inv.service_name.toLowerCase().includes('tractor') || inv.service_name.toLowerCase().includes('drone'))))
       }));
       setInvoices(fetchedInvoices);
     } catch (err) {
@@ -271,7 +272,17 @@ export default function ManageInvoices() {
       Toast.fire({ icon: 'success', title: 'Commission invoice downloaded successfully' });
     } catch (err: any) {
       console.error('Failed to download commission invoice:', err);
-      Toast.fire({ icon: 'error', title: err.response?.data?.message || 'Commission invoice only available for Partner services' });
+      let errMsg = 'Failed to download commission invoice';
+      if (err.response?.data instanceof Blob) {
+        try {
+          const text = await err.response.data.text();
+          const parsed = JSON.parse(text);
+          errMsg = parsed.message || errMsg;
+        } catch {}
+      } else if (err.response?.data?.message) {
+        errMsg = err.response.data.message;
+      }
+      Toast.fire({ icon: 'error', title: errMsg });
     }
   };
 
@@ -301,6 +312,15 @@ export default function ManageInvoices() {
       }
     }
   };
+
+  const isServiceInvoice = (inv: Invoice) => {
+    if (inv.orderId && (inv.orderId.startsWith('SR-') || inv.orderId.startsWith('BKG-'))) return true;
+    if (inv.type === 'SERVICE') return true;
+    return false;
+  };
+
+  const isVendorInvoice = (inv: Invoice) => !isServiceInvoice(inv);
+  const displayedInvoices = invoices.filter(inv => activeTab === 'vendor_invoices' ? isVendorInvoice(inv) : isServiceInvoice(inv));
 
   return (
     <div className="manage-invoices">
@@ -349,14 +369,14 @@ export default function ManageInvoices() {
                 </tr>
               </thead>
               <tbody>
-                {invoices.filter(inv => activeTab === 'vendor_invoices' ? (inv.type === 'VENDOR' || !!inv.vendorBusinessName) : (inv.type === 'SERVICE' || !inv.vendorBusinessName)).length === 0 ? (
+                {displayedInvoices.length === 0 ? (
                   <tr>
                     <td colSpan={activeTab === 'service_invoices' ? 10 : 9} style={{ padding: '40px', textAlign: 'center', color: '#333' }}>
                       No invoices generated yet
                     </td>
                   </tr>
                 ) : (
-                  invoices.filter(inv => activeTab === 'vendor_invoices' ? (inv.type === 'VENDOR' || !!inv.vendorBusinessName) : (inv.type === 'SERVICE' || !inv.vendorBusinessName)).map(inv => (
+                  displayedInvoices.map(inv => (
                     <tr key={inv.id}>
                       <td><strong>{inv.invoiceNumber}</strong></td>
                       <td>{inv.customerName}</td>
@@ -392,7 +412,7 @@ export default function ManageInvoices() {
                         >
                           <MdDownload /> Download
                         </button>
-                        {activeTab === 'service_invoices' && (
+                        {activeTab === 'service_invoices' && inv.isPartner && (
                           <button
                             className="btn-action-green"
                             onClick={() => handleDownloadCommissionPDF(inv.orderId || inv.srNo || '')}
