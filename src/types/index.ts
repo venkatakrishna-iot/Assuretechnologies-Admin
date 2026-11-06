@@ -222,6 +222,7 @@ export interface Quotation {
   additionalCharges: number;
   gstPercent: number;
   grandTotal: number;
+  termsAndConditions?: string;
   services: QuotationService[];
   date: string;
 }
@@ -246,6 +247,7 @@ export interface Invoice {
   email: string;
   address: string;
   items: InvoiceItem[];
+  subtotal?: number;
   additionalChargesDesc?: string;
   additionalCharges: number;
   gstPercent: number;
@@ -263,6 +265,11 @@ export interface Invoice {
   orderId?: string;
   type?: string;
   isPartner?: boolean;
+  companyName?: string;
+  gstNumber?: string;
+  pincode?: string;
+  termsAndConditions?: string;
+  isManual?: boolean;
 }
 
 export interface PartnerCustomField {

@@ -4,16 +4,65 @@ import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import Swal from 'sweetalert2';
 import { quotationsApi, type CreateQuotationPayload } from '../services/quotationsApi';
-import type { Quotation, QuotationService } from '../types';
+import { invoicesApi, type CreateManualInvoicePayload } from '../services/invoicesApi';
+import type { Quotation, QuotationService, Invoice } from '../types';
+import Pagination from '../components/Pagination';
 import './ManageQuotations.css';
 
-export default function ManageQuotations() {
-  const [activeTab, setActiveTab] = useState<'table' | 'form' | 'view'>('table');
-  const [viewingQuotation, setViewingQuotation] = useState<Quotation | null>(null);
-  const [quotations, setQuotations] = useState<Quotation[]>([]);
-  const [loading, setLoading] = useState(false);
+export const DEFAULT_QUOTATION_TERMS = `Payment Terms & Conditions
 
-  // Form State
+• Payment Milestone Schedule: 100% upfront deposit prior to equipment procurement on material value, 50% upon physical installation of hardware, and the final 50% balance upon successful testing, commissioning, and handover of the system about service.
+• Payment Due Date: Full payment is strictly due within 5 days from the final invoice date.
+• Late Payment Interest: A late fee of 3.5% per month will be charged on all overdue balances.
+• Retention of Title: All equipment remains the legal property of the service provider until the invoice is paid in full. The provider reserves the right to de-install or remotely deactivates equipment if payment is breached.
+• Work Suspension: Failure to pay milestones on time grants the provider the right to pause installation, programming, or remote viewing setup until accounts are cleared.
+• The material quantity may vary depending on site condition will be charged as per actual.
+• If necessary, it may vary (cables, wire laying charges, cameras and installation, if any).
+• All civil work at customer scope (Digging), Iron poles and height support should be provided by customer while installation and if any electrical UPS provision, PVC pipes and fittings, welding work also customer scope.
+• Transportation Extra.
+• Accommodation and food facilities to the technician and engineers should be provided by customers.
+• Delivery of goods within 1-2 weeks.
+• Electrical UPS Wiring provision should be done by customers as per Network switch position.
+• Camera positions and rack mounting place should be declared before work starts, if any changes done after work start will be considered as extra work and considered as accountable to those particulars.
+
+Company's Bank Details
+
+In favor of Assure Technologies, Bank - INDIAN Bank, A/C - 8018432127
+IFSC - IDIB000K088, A. Konduru Branch`;
+
+export const DEFAULT_INVOICE_TERMS = `Component Warranty Conditions
+
+• Manufacturer Warranty: Hardware components (cameras, NVRs/DVRs, hard drives) carry a 1-to-3-year manufacturer warranty from the date of purchase. The installer acts as the facilitator for these claims.
+• Workmanship/Labor Warranty: Installation labor is typically covered for 90 days to 1 year. This covers faulty wiring, loose mounts, or incorrect configuration by the technicians.
+• Warranty Exclusions: The warranty is strictly void under the following conditions:
+  ◦ Damage caused by lightning strikes, power surges, floods, or acts of God.
+  ◦ Vandalism, physical tampering, or unauthorized relocation of cameras.
+  ◦ Modifications to software settings, network routing, or firmware updates done by the client or a third party.
+• Consumables Exclusion: Cables, connectors, power adapters, and batteries are generally excluded from long-term warranties or carry a heavily reduced coverage period (e.g., 90 days).
+• Advance Replacement Policy: Defective components must be tested and verified before a replacement is issued. Loaner cameras during the manufacturer repair window are not included unless a separate Annual Maintenance Contract (AMC) is signed.
+
+Company's Bank Details
+
+In favor of Assure Technologies, Bank - INDIAN Bank, A/C - 8018432127
+IFSC - IDIB000K088, A. Konduru Branch`;
+
+type TabType = 'quotations' | 'generate_quotation' | 'invoices' | 'generate_invoice' | 'view_quotation' | 'view_invoice';
+
+export default function ManageQuotations() {
+  const [activeTab, setActiveTab] = useState<TabType>('quotations');
+  const [viewingQuotation, setViewingQuotation] = useState<Quotation | null>(null);
+  const [viewingInvoice, setViewingInvoice] = useState<Invoice | null>(null);
+  const [quotations, setQuotations] = useState<Quotation[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [invoicesLoading, setInvoicesLoading] = useState(false);
+
+  // Pagination State
+  const [quotationPage, setQuotationPage] = useState<number>(1);
+  const [invoicePage, setInvoicePage] = useState<number>(1);
+  const itemsPerPage = 10;
+
+  // Quotation Form State
   const [customerName, setCustomerName] = useState('');
   const [mobile, setMobile] = useState('');
   const [email, setEmail] = useState('');
@@ -29,15 +78,55 @@ export default function ManageQuotations() {
   const [additionalChargesDesc, setAdditionalChargesDesc] = useState('');
   const [additionalCharges, setAdditionalCharges] = useState<number>(0);
   const [gstPercent, setGstPercent] = useState<number>(18);
+  const [termsAndConditions, setTermsAndConditions] = useState<string>(DEFAULT_QUOTATION_TERMS);
 
-  // Derived calculations
+  // Quotation Derived calculations
   const servicesTotal = services.reduce((sum, s) => sum + (s.qty * s.cost), 0);
   const totalBeforeGst = servicesTotal + (additionalCharges || 0);
   const gstAmount = (totalBeforeGst * gstPercent) / 100;
   const grandTotal = totalBeforeGst + gstAmount;
 
+  // Invoice Form State (Exact Replica)
+  const [invCustomerName, setInvCustomerName] = useState('');
+  const [invMobile, setInvMobile] = useState('');
+  const [invEmail, setInvEmail] = useState('');
+  const [invCompanyName, setInvCompanyName] = useState('');
+  const [invGstNumber, setInvGstNumber] = useState('');
+  const [invAddress, setInvAddress] = useState('');
+  const [invPincode, setInvPincode] = useState('');
+
+  const [invServices, setInvServices] = useState<QuotationService[]>([
+    { id: '1', name: '', qty: 1, cost: 0, total: 0 }
+  ]);
+
+  const [invAdditionalChargesDesc, setInvAdditionalChargesDesc] = useState('');
+  const [invAdditionalCharges, setInvAdditionalCharges] = useState<number>(0);
+  const [invGstPercent, setInvGstPercent] = useState<number>(18);
+  const [invTermsAndConditions, setInvTermsAndConditions] = useState<string>(DEFAULT_INVOICE_TERMS);
+
+  // Invoice Derived calculations
+  const invServicesTotal = invServices.reduce((sum, s) => sum + (s.qty * s.cost), 0);
+  const invTotalBeforeGst = invServicesTotal + (invAdditionalCharges || 0);
+  const invGstAmount = (invTotalBeforeGst * invGstPercent) / 100;
+  const invGrandTotal = invTotalBeforeGst + invGstAmount;
+
+  // Quotation pagination slices
+  const totalQuotationPages = Math.ceil(quotations.length / itemsPerPage) || 1;
+  const paginatedQuotations = quotations.slice(
+    (quotationPage - 1) * itemsPerPage,
+    quotationPage * itemsPerPage
+  );
+
+  // Invoice pagination slices
+  const totalInvoicePages = Math.ceil(invoices.length / itemsPerPage) || 1;
+  const paginatedInvoices = invoices.slice(
+    (invoicePage - 1) * itemsPerPage,
+    invoicePage * itemsPerPage
+  );
+
   useEffect(() => {
     fetchQuotations();
+    fetchInvoices();
   }, []);
 
   const fetchQuotations = async () => {
@@ -60,6 +149,7 @@ export default function ManageQuotations() {
           additionalCharges: parseFloat(q.additional_charges || 0),
           gstPercent: parseFloat(q.gst_percent || 18),
           grandTotal: parseFloat(q.grand_total || 0),
+          termsAndConditions: q.terms_and_conditions || DEFAULT_QUOTATION_TERMS,
           services: (q.items || []).map((it: any) => ({
             id: it.id,
             name: it.service_name,
@@ -78,6 +168,50 @@ export default function ManageQuotations() {
     }
   };
 
+  const fetchInvoices = async () => {
+    try {
+      setInvoicesLoading(true);
+      const res = await invoicesApi.getAdminInvoices();
+      if (res.data?.data) {
+        // Filter strictly for manual invoices created via Generate Invoice
+        const manualOnly = res.data.data.filter((inv: any) => inv.is_manual === true || inv.is_manual === 1 || inv.isManual === true);
+        const mapped: Invoice[] = manualOnly.map((inv: any) => ({
+          id: inv.id,
+          invoiceNumber: inv.invoice_number,
+          customerName: inv.customer_name,
+          mobile: inv.mobile,
+          email: inv.email || '',
+          companyName: inv.company_name || '',
+          gstNumber: inv.gst_number || '',
+          address: inv.address || '',
+          pincode: inv.pincode || '',
+          subtotal: (inv.items || []).reduce((s: number, i: any) => s + (parseFloat(i.amount) || (parseFloat(i.rate) * parseInt(i.qty || 1, 10))), 0),
+          additionalChargesDesc: inv.additional_charges_desc || '',
+          additionalCharges: parseFloat(inv.additional_charges || 0),
+          gstPercent: parseFloat(inv.gst_percent || 18),
+          grandTotal: parseFloat(inv.grand_total || 0),
+          termsAndConditions: inv.terms_and_conditions || DEFAULT_INVOICE_TERMS,
+          date: inv.createdAt ? new Date(inv.createdAt).toLocaleDateString() : '',
+          status: inv.status || 'Paid',
+          isManual: true,
+          items: (inv.items || []).map((it: any) => ({
+            id: it.id,
+            description: it.description,
+            qty: it.qty,
+            rate: parseFloat(it.rate || 0),
+            amount: parseFloat(it.amount || 0)
+          }))
+        }));
+        setInvoices(mapped);
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch invoices:', err);
+    } finally {
+      setInvoicesLoading(false);
+    }
+  };
+
+  // Quotation row handlers
   const handleAddRow = () => {
     setServices([
       ...services,
@@ -93,6 +227,35 @@ export default function ManageQuotations() {
 
   const handleServiceChange = (id: string, field: keyof QuotationService, value: any) => {
     setServices(services.map(s => {
+      if (s.id === id) {
+        const updated = { ...s, [field]: value };
+        if (field === 'qty' || field === 'cost') {
+          const q = field === 'qty' ? parseInt(value) || 0 : s.qty;
+          const c = field === 'cost' ? parseFloat(value) || 0 : s.cost;
+          updated.total = q * c;
+        }
+        return updated;
+      }
+      return s;
+    }));
+  };
+
+  // Invoice row handlers (Exact Replica)
+  const handleAddInvRow = () => {
+    setInvServices([
+      ...invServices,
+      { id: Date.now().toString(), name: '', qty: 1, cost: 0, total: 0 }
+    ]);
+  };
+
+  const handleRemoveInvRow = (id: string) => {
+    if (invServices.length > 1) {
+      setInvServices(invServices.filter(s => s.id !== id));
+    }
+  };
+
+  const handleInvServiceChange = (id: string, field: keyof QuotationService, value: any) => {
+    setInvServices(invServices.map(s => {
       if (s.id === id) {
         const updated = { ...s, [field]: value };
         if (field === 'qty' || field === 'cost') {
@@ -151,7 +314,8 @@ export default function ManageQuotations() {
         })),
         additional_charges_desc: additionalChargesDesc.trim() || undefined,
         additional_charges: additionalCharges || 0,
-        gst_percent: gstPercent
+        gst_percent: gstPercent,
+        terms_and_conditions: termsAndConditions.trim() || undefined
       };
 
       await quotationsApi.createQuotation(payload);
@@ -175,12 +339,96 @@ export default function ManageQuotations() {
       setAdditionalChargesDesc('');
       setAdditionalCharges(0);
       setGstPercent(18);
+      setTermsAndConditions(DEFAULT_QUOTATION_TERMS);
 
       // Refresh list & switch to table
       await fetchQuotations();
-      setActiveTab('table');
+      setActiveTab('quotations');
     } catch (err: any) {
       const msg = err.response?.data?.message || err.message || 'Failed to save quotation';
+      Swal.fire({ icon: 'error', title: 'Error', text: msg });
+    }
+  };
+
+  const handleSaveInvoice = async () => {
+    if (!invCustomerName.trim()) {
+      Swal.fire({ icon: 'warning', title: 'Missing Details', text: 'Please enter Customer Name.' });
+      return;
+    }
+
+    const cleanMobile = invMobile.replace(/\D/g, '');
+    if (cleanMobile.length !== 10) {
+      Swal.fire({ icon: 'warning', title: 'Invalid Mobile', text: 'Please enter a valid 10-digit mobile number.' });
+      return;
+    }
+
+    if (invGstNumber.trim() && invGstNumber.trim().length !== 15) {
+      Swal.fire({ icon: 'warning', title: 'Invalid GSTIN', text: 'GST Number must be 15 characters.' });
+      return;
+    }
+
+    if (invPincode.trim() && invPincode.trim().length !== 6) {
+      Swal.fire({ icon: 'warning', title: 'Invalid Pincode', text: 'Pincode must be 6 digits.' });
+      return;
+    }
+
+    const validServices = invServices.filter(s => s.name.trim() && s.cost > 0);
+    if (validServices.length === 0) {
+      Swal.fire({ icon: 'warning', title: 'Missing Service Details', text: 'Please add at least one service with a name and cost.' });
+      return;
+    }
+
+    try {
+      const payload: CreateManualInvoicePayload = {
+        customerName: invCustomerName.trim(),
+        mobile: cleanMobile,
+        email: invEmail.trim() || undefined,
+        companyName: invCompanyName.trim() || undefined,
+        gstNumber: invGstNumber.trim().toUpperCase() || undefined,
+        address: invAddress.trim() || undefined,
+        pincode: invPincode.trim() || undefined,
+        items: validServices.map(s => ({
+          name: s.name.trim(),
+          qty: s.qty,
+          cost: s.cost,
+          total: s.total
+        })),
+        additionalChargesDesc: invAdditionalChargesDesc.trim() || undefined,
+        additionalCharges: invAdditionalCharges || 0,
+        gstPercent: invGstPercent,
+        grandTotal: invGrandTotal,
+        termsAndConditions: invTermsAndConditions.trim() || undefined,
+        isManual: true
+      };
+
+      await invoicesApi.createInvoice(payload);
+      
+      Swal.fire({
+        icon: 'success',
+        title: 'Invoice Generated!',
+        timer: 1500,
+        showConfirmButton: false
+      });
+
+      // Reset Form
+      setInvCustomerName('');
+      setInvMobile('');
+      setInvEmail('');
+      setInvCompanyName('');
+      setInvGstNumber('');
+      setInvAddress('');
+      setInvPincode('');
+      setInvServices([{ id: Date.now().toString(), name: '', qty: 1, cost: 0, total: 0 }]);
+      setInvAdditionalChargesDesc('');
+      setInvAdditionalCharges(0);
+      setInvGstPercent(18);
+      setInvTermsAndConditions(DEFAULT_INVOICE_TERMS);
+
+      // Refresh list & switch to invoices table
+      await fetchInvoices();
+      setActiveTab('invoices');
+    } catch (err: any) {
+      const msg = err.response?.data?.message || err.message || 'Failed to save invoice';
       Swal.fire({ icon: 'error', title: 'Error', text: msg });
     }
   };
@@ -199,7 +447,41 @@ export default function ManageQuotations() {
     if (result.isConfirmed) {
       try {
         await quotationsApi.deleteQuotation(id);
-        setQuotations(quotations.filter(q => q.id !== id));
+        setQuotations(prev => {
+          const updated = prev.filter(q => q.id !== id);
+          if (quotationPage > 1 && updated.length <= (quotationPage - 1) * itemsPerPage) {
+            setQuotationPage(p => p - 1);
+          }
+          return updated;
+        });
+        Swal.fire({ icon: 'success', title: 'Deleted!', timer: 1200, showConfirmButton: false });
+      } catch (err: any) {
+        Swal.fire({ icon: 'error', title: 'Error', text: err.message });
+      }
+    }
+  };
+
+  const handleDeleteInvoice = async (id: string) => {
+    const result = await Swal.fire({
+      title: 'Delete Invoice?',
+      text: 'Are you sure you want to delete this invoice?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: 'Yes, delete it!'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        await invoicesApi.deleteInvoice(id);
+        setInvoices(prev => {
+          const updated = prev.filter(inv => inv.id !== id);
+          if (invoicePage > 1 && updated.length <= (invoicePage - 1) * itemsPerPage) {
+            setInvoicePage(p => p - 1);
+          }
+          return updated;
+        });
         Swal.fire({ icon: 'success', title: 'Deleted!', timer: 1200, showConfirmButton: false });
       } catch (err: any) {
         Swal.fire({ icon: 'error', title: 'Error', text: err.message });
@@ -217,16 +499,69 @@ export default function ManageQuotations() {
     }
 
     try {
-      const canvas = await html2canvas(input, { scale: 2 });
+      const canvas = await html2canvas(input, { scale: 2, useCORS: true });
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-      
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position -= pageHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
       pdf.save(`Quotation_${quotationNumber}.pdf`);
     } catch (err) {
       console.error('Failed to generate PDF', err);
+      Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to generate PDF' });
+    } finally {
+      if (actionButtons) {
+        (actionButtons as HTMLElement).style.display = 'flex';
+      }
+    }
+  };
+
+  const handleDownloadInvoicePDF = async (invoiceNumber: string) => {
+    const input = document.getElementById('invoice-details-pdf');
+    if (!input) return;
+
+    const actionButtons = input.querySelector('.pdf-exclude-buttons');
+    if (actionButtons) {
+      (actionButtons as HTMLElement).style.display = 'none';
+    }
+
+    try {
+      const canvas = await html2canvas(input, { scale: 2, useCORS: true });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position -= pageHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      pdf.save(`Invoice_${invoiceNumber}.pdf`);
+    } catch (err) {
+      console.error('Failed to generate PDF', err);
+      Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to generate PDF' });
     } finally {
       if (actionButtons) {
         (actionButtons as HTMLElement).style.display = 'flex';
@@ -236,99 +571,120 @@ export default function ManageQuotations() {
 
   return (
     <div className="manage-quotations">
-      <h3 className="quotations-title">Quotation Management</h3>
+      <h3 className="quotations-title">Quotation & Invoice Management</h3>
 
       <div className="quotation-tabs">
         <button 
-          className={`quotation-tab ${activeTab === 'table' ? 'active' : ''}`}
-          onClick={() => { setActiveTab('table'); setViewingQuotation(null); }}
+          className={`quotation-tab ${activeTab === 'quotations' ? 'active' : ''}`}
+          onClick={() => { setActiveTab('quotations'); setViewingQuotation(null); setViewingInvoice(null); setQuotationPage(1); }}
         >
           Quotations
         </button>
         <button 
-          className={`quotation-tab ${activeTab === 'form' ? 'active' : ''}`}
-          onClick={() => { setActiveTab('form'); setViewingQuotation(null); }}
+          className={`quotation-tab ${activeTab === 'generate_quotation' ? 'active' : ''}`}
+          onClick={() => { setActiveTab('generate_quotation'); setViewingQuotation(null); setViewingInvoice(null); }}
         >
           Generate Quotation
+        </button>
+        <button 
+          className={`quotation-tab ${activeTab === 'invoices' ? 'active' : ''}`}
+          onClick={() => { setActiveTab('invoices'); setViewingQuotation(null); setViewingInvoice(null); setInvoicePage(1); }}
+        >
+          Invoices
+        </button>
+        <button 
+          className={`quotation-tab ${activeTab === 'generate_invoice' ? 'active' : ''}`}
+          onClick={() => { setActiveTab('generate_invoice'); setViewingQuotation(null); setViewingInvoice(null); }}
+        >
+          Generate Invoice
         </button>
       </div>
 
       <div className="quotation-container">
-        {activeTab === 'table' && (
-          <div className="ref-table-wrapper" style={{ margin: 0 }}>
-            <table className="quotations-list-table ref-table" style={{ border: 'none' }}>
-              <thead>
-                <tr>
-                  <th>Quotation No</th>
-                  <th>Customer</th>
-                  <th>Mobile</th>
-                  <th>Total</th>
-                  <th>Date</th>
-                  <th style={{ textAlign: 'center' }}>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
+        {/* Quotations List Tab */}
+        {activeTab === 'quotations' && (
+          <>
+            <div className="ref-table-wrapper" style={{ margin: 0 }}>
+              <table className="quotations-list-table ref-table" style={{ border: 'none' }}>
+                <thead>
                   <tr>
-                    <td colSpan={6} style={{ padding: '30px', textAlign: 'center' }}>
-                      Loading quotations...
-                    </td>
+                    <th>Quotation No</th>
+                    <th>Customer</th>
+                    <th>Mobile</th>
+                    <th>Total</th>
+                    <th>Date</th>
+                    <th style={{ textAlign: 'center' }}>Action</th>
                   </tr>
-                ) : quotations.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} style={{ padding: '40px', textAlign: 'center', color: '#333' }}>
-                      No quotations found
-                    </td>
-                  </tr>
-                ) : (
-                  quotations.map(q => (
-                    <tr key={q.id}>
-                      <td><strong>{q.quotationNumber}</strong></td>
-                      <td>{q.customerName}</td>
-                      <td>{q.mobile}</td>
-                      <td>{q.grandTotal.toFixed(2)}</td>
-                      <td>{q.date}</td>
-                      <td style={{ textAlign: 'center', display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                        <button 
-                          className="btn-action-green"
-                          onClick={() => {
-                            setViewingQuotation(q);
-                            setActiveTab('view');
-                          }}
-                          style={{ padding: '4px 8px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '4px' }}
-                        >
-                          <MdVisibility /> View
-                        </button>
-                        <button 
-                          className="btn-action-green"
-                          onClick={() => {
-                            setViewingQuotation(q);
-                            setActiveTab('view');
-                            setTimeout(() => {
-                              handleDownloadPDF(q.quotationNumber);
-                            }, 300);
-                          }}
-                          style={{ padding: '4px 8px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: '#3b82f6' }}
-                        >
-                          <MdDownload /> Download
-                        </button>
-                        <button 
-                          className="btn-remove-row"
-                          onClick={() => handleDeleteQuotation(q.id)}
-                          style={{ padding: '4px 8px', fontSize: '0.9rem' }}
-                        >
-                          <MdClose />
-                        </button>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr>
+                      <td colSpan={6} style={{ padding: '30px', textAlign: 'center' }}>
+                        Loading quotations...
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  ) : quotations.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ padding: '40px', textAlign: 'center', color: '#333' }}>
+                        No quotations found
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedQuotations.map(q => (
+                      <tr key={q.id}>
+                        <td><strong>{q.quotationNumber}</strong></td>
+                        <td>{q.customerName}</td>
+                        <td>{q.mobile}</td>
+                        <td>₹{q.grandTotal.toFixed(2)}</td>
+                        <td>{q.date}</td>
+                        <td style={{ textAlign: 'center', display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                          <button 
+                            className="btn-action-green"
+                            onClick={() => {
+                              setViewingQuotation(q);
+                              setActiveTab('view_quotation');
+                            }}
+                            style={{ padding: '4px 8px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                          >
+                            <MdVisibility /> View
+                          </button>
+                          <button 
+                            className="btn-action-green"
+                            onClick={() => {
+                              setViewingQuotation(q);
+                              setActiveTab('view_quotation');
+                              setTimeout(() => {
+                                handleDownloadPDF(q.quotationNumber);
+                              }, 300);
+                            }}
+                            style={{ padding: '4px 8px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: '#3b82f6' }}
+                          >
+                            <MdDownload /> Download
+                          </button>
+                          <button 
+                            className="btn-remove-row"
+                            onClick={() => handleDeleteQuotation(q.id)}
+                            style={{ padding: '4px 8px', fontSize: '0.9rem' }}
+                          >
+                            <MdClose />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <Pagination
+              currentPage={quotationPage}
+              totalPages={totalQuotationPages}
+              onPageChange={setQuotationPage}
+            />
+          </>
         )}
 
-        {activeTab === 'form' && (
+        {/* Generate Quotation Tab */}
+        {activeTab === 'generate_quotation' && (
           <div>
             <h4 className="section-title">Customer Details</h4>
             
@@ -495,10 +851,30 @@ export default function ManageQuotations() {
               </div>
             </div>
 
-            <div className="terms-box">
-              <p>• This quotation is valid for 7 days</p>
-              <p>• GST applicable as per norms</p>
-              <p>• Prices subject to approval</p>
+            <div className="quotation-terms-edit-section">
+              <div className="terms-header">
+                <label className="section-title" style={{ fontSize: '1rem', margin: 0 }}>
+                  Terms & Conditions & Bank Details
+                </label>
+                <button
+                  type="button"
+                  className="btn-reset-terms"
+                  onClick={() => setTermsAndConditions(DEFAULT_QUOTATION_TERMS)}
+                  title="Reset terms to default template"
+                >
+                  Reset to Default
+                </button>
+              </div>
+              <textarea
+                className="ref-input terms-textarea"
+                rows={12}
+                value={termsAndConditions}
+                onChange={e => setTermsAndConditions(e.target.value)}
+                placeholder="Enter quotation terms and conditions..."
+              />
+              <span className="terms-hint">
+                You can customize or edit these terms and bank details for this specific quotation before saving.
+              </span>
             </div>
 
             <button className="btn-save-quotation" onClick={handleSaveQuotation}>
@@ -507,7 +883,290 @@ export default function ManageQuotations() {
           </div>
         )}
 
-        {activeTab === 'view' && viewingQuotation && (
+        {/* Invoices List Tab */}
+        {activeTab === 'invoices' && (
+          <>
+            <div className="ref-table-wrapper" style={{ margin: 0 }}>
+              <table className="quotations-list-table ref-table" style={{ border: 'none' }}>
+                <thead>
+                  <tr>
+                    <th>Invoice No</th>
+                    <th>Customer</th>
+                    <th>Mobile</th>
+                    <th>Total</th>
+                    <th>Date</th>
+                    <th style={{ textAlign: 'center' }}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invoicesLoading ? (
+                    <tr>
+                      <td colSpan={6} style={{ padding: '30px', textAlign: 'center' }}>
+                        Loading invoices...
+                      </td>
+                    </tr>
+                  ) : invoices.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ padding: '40px', textAlign: 'center', color: '#333' }}>
+                        No invoices found
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedInvoices.map(inv => (
+                      <tr key={inv.id}>
+                        <td><strong>{inv.invoiceNumber}</strong></td>
+                        <td>{inv.customerName}</td>
+                        <td>{inv.mobile}</td>
+                        <td>₹{inv.grandTotal.toFixed(2)}</td>
+                        <td>{inv.date}</td>
+                        <td style={{ textAlign: 'center', display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                          <button 
+                            className="btn-action-green"
+                            onClick={() => {
+                              setViewingInvoice(inv);
+                              setActiveTab('view_invoice');
+                            }}
+                            style={{ padding: '4px 8px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                          >
+                            <MdVisibility /> View
+                          </button>
+                          <button 
+                            className="btn-action-green"
+                            onClick={() => {
+                              setViewingInvoice(inv);
+                              setActiveTab('view_invoice');
+                              setTimeout(() => {
+                                handleDownloadInvoicePDF(inv.invoiceNumber);
+                              }, 300);
+                            }}
+                            style={{ padding: '4px 8px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: '#3b82f6' }}
+                          >
+                            <MdDownload /> Download
+                          </button>
+                          <button 
+                            className="btn-remove-row"
+                            onClick={() => handleDeleteInvoice(inv.id)}
+                            style={{ padding: '4px 8px', fontSize: '0.9rem' }}
+                          >
+                            <MdClose />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <Pagination
+              currentPage={invoicePage}
+              totalPages={totalInvoicePages}
+              onPageChange={setInvoicePage}
+            />
+          </>
+        )}
+
+        {/* Generate Invoice Tab (Exact Replica of Generate Quotation) */}
+        {activeTab === 'generate_invoice' && (
+          <div>
+            <h4 className="section-title">Customer Details</h4>
+            
+            <div className="form-grid-3">
+              <input 
+                type="text" 
+                className="ref-input" 
+                placeholder="Customer Name" 
+                value={invCustomerName} 
+                onChange={e => setInvCustomerName(e.target.value)} 
+                required 
+              />
+              <input 
+                type="text" 
+                className="ref-input" 
+                placeholder="Mobile" 
+                maxLength={10}
+                value={invMobile} 
+                onChange={e => setInvMobile(e.target.value.replace(/\D/g, ''))} 
+                required 
+              />
+              <input 
+                type="text" 
+                className="ref-input" 
+                placeholder="Email" 
+                value={invEmail} 
+                onChange={e => setInvEmail(e.target.value)} 
+              />
+            </div>
+            
+            <div className="form-grid-2">
+              <input 
+                type="text" 
+                className="ref-input" 
+                placeholder="Company Name (Optional)" 
+                value={invCompanyName} 
+                onChange={e => setInvCompanyName(e.target.value)} 
+              />
+              <input 
+                type="text" 
+                className="ref-input" 
+                placeholder="GST Number (Optional)" 
+                maxLength={15}
+                value={invGstNumber} 
+                onChange={e => setInvGstNumber(e.target.value.toUpperCase())} 
+              />
+            </div>
+            
+            <div className="form-grid-1">
+              <input 
+                type="text" 
+                className="ref-input" 
+                placeholder="Address" 
+                value={invAddress} 
+                onChange={e => setInvAddress(e.target.value)} 
+              />
+            </div>
+            
+            <div className="form-grid-1">
+              <input 
+                type="text" 
+                className="ref-input" 
+                placeholder="Pincode" 
+                maxLength={6}
+                value={invPincode} 
+                onChange={e => setInvPincode(e.target.value.replace(/\D/g, ''))} 
+              />
+            </div>
+
+            <hr style={{ border: '0', borderTop: '1px solid #dee2e6', margin: '20px 0' }} />
+
+            <h4 className="section-title">Service Details</h4>
+            
+            <div className="ref-table-wrapper">
+              <table className="ref-table">
+                <thead>
+                  <tr>
+                    <th className="col-num">#</th>
+                    <th className="col-name">Service Name</th>
+                    <th className="col-qty">Qty</th>
+                    <th className="col-cost">Cost</th>
+                    <th className="col-total">Total</th>
+                    <th className="col-action"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invServices.map((svc, idx) => (
+                    <tr key={svc.id}>
+                      <td className="col-num">{idx + 1}</td>
+                      <td>
+                        <input 
+                          type="text" 
+                          className="ref-input"
+                          value={svc.name}
+                          onChange={e => handleInvServiceChange(svc.id, 'name', e.target.value)}
+                        />
+                      </td>
+                      <td>
+                        <input 
+                          type="number" 
+                          className="ref-input"
+                          value={svc.qty || ''}
+                          onChange={e => handleInvServiceChange(svc.id, 'qty', parseInt(e.target.value) || 0)}
+                        />
+                      </td>
+                      <td>
+                        <input 
+                          type="number" 
+                          className="ref-input"
+                          value={svc.cost || ''}
+                          onChange={e => handleInvServiceChange(svc.id, 'cost', parseFloat(e.target.value) || 0)}
+                        />
+                      </td>
+                      <td>
+                        <div className="ref-input" style={{ background: '#e9ecef', border: '1px solid transparent', color: '#495057' }}>
+                          {svc.total.toFixed(2)}
+                        </div>
+                      </td>
+                      <td className="col-action">
+                        <button type="button" className="btn-remove-row" onClick={() => handleRemoveInvRow(svc.id)}>
+                          <MdClose />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <button type="button" className="btn-add-row" onClick={handleAddInvRow}>
+              + Add Row
+            </button>
+
+            <div className="calc-grid-2">
+              <input 
+                type="text" 
+                className="ref-input" 
+                placeholder="Additional Charges Description" 
+                value={invAdditionalChargesDesc}
+                onChange={e => setInvAdditionalChargesDesc(e.target.value)}
+              />
+              <input 
+                type="number" 
+                className="ref-input" 
+                placeholder="0" 
+                value={invAdditionalCharges || ''}
+                onChange={e => setInvAdditionalCharges(parseFloat(e.target.value) || 0)}
+              />
+            </div>
+
+            <div className="calc-grid-3">
+              <input 
+                type="number" 
+                className="ref-input" 
+                placeholder="18" 
+                value={invGstPercent}
+                onChange={e => setInvGstPercent(parseFloat(e.target.value) || 0)}
+              />
+              <div className="ref-readonly">
+                {invGstAmount.toFixed(2)}
+              </div>
+              <div className="ref-readonly">
+                {invGrandTotal.toFixed(2)}
+              </div>
+            </div>
+
+            <div className="quotation-terms-edit-section">
+              <div className="terms-header">
+                <label className="section-title" style={{ fontSize: '1rem', margin: 0 }}>
+                  Terms & Conditions & Bank Details
+                </label>
+                <button
+                  type="button"
+                  className="btn-reset-terms"
+                  onClick={() => setInvTermsAndConditions(DEFAULT_INVOICE_TERMS)}
+                  title="Reset terms to default template"
+                >
+                  Reset to Default
+                </button>
+              </div>
+              <textarea
+                className="ref-input terms-textarea"
+                rows={12}
+                value={invTermsAndConditions}
+                onChange={e => setInvTermsAndConditions(e.target.value)}
+                placeholder="Enter invoice terms and conditions..."
+              />
+              <span className="terms-hint">
+                You can customize or edit these terms and bank details for this specific invoice before saving.
+              </span>
+            </div>
+
+            <button className="btn-save-invoice" onClick={handleSaveInvoice}>
+              Save Invoice
+            </button>
+          </div>
+        )}
+
+        {/* View Quotation Preview */}
+        {activeTab === 'view_quotation' && viewingQuotation && (
           <div id="quotation-details-pdf" style={{ padding: '20px', background: 'white' }}>
             <div className="pdf-exclude-buttons" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
               <h4 className="section-title" style={{ margin: 0 }}>Quotation Details</h4>
@@ -523,7 +1182,7 @@ export default function ManageQuotations() {
                   className="btn-remove-row"
                   style={{ width: 'auto', padding: '4px 12px', fontSize: '0.85rem' }}
                   onClick={() => {
-                    setActiveTab('table');
+                    setActiveTab('quotations');
                     setViewingQuotation(null);
                   }}
                 >
@@ -544,45 +1203,161 @@ export default function ManageQuotations() {
               <div><strong>Pincode:</strong> {viewingQuotation.pincode || 'N/A'}</div>
             </div>
 
-            <h4 className="section-title">Service Details</h4>
-            <div className="ref-table-wrapper">
-              <table className="ref-table">
+            <div className="ref-table-wrapper" style={{ margin: '0 0 20px 0' }}>
+              <table className="quotations-list-table ref-table" style={{ border: 'none' }}>
                 <thead>
                   <tr>
-                    <th className="col-num">#</th>
-                    <th className="col-name">Service Name</th>
-                    <th className="col-qty">Qty</th>
-                    <th className="col-cost">Cost</th>
-                    <th className="col-total">Total</th>
+                    <th>#</th>
+                    <th>Service Name</th>
+                    <th>Qty</th>
+                    <th>Cost</th>
+                    <th>Total</th>
                   </tr>
                 </thead>
                 <tbody>
                   {viewingQuotation.services.map((svc, idx) => (
                     <tr key={svc.id}>
-                      <td className="col-num">{idx + 1}</td>
+                      <td>{idx + 1}</td>
                       <td>{svc.name}</td>
                       <td>{svc.qty}</td>
-                      <td>{svc.cost.toFixed(2)}</td>
-                      <td>{svc.total.toFixed(2)}</td>
+                      <td>₹{svc.cost.toFixed(2)}</td>
+                      <td>₹{svc.total.toFixed(2)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
 
-            {(() => {
-              const servicesTotal = viewingQuotation.services.reduce((sum, s) => sum + s.total, 0);
-              const totalBeforeGst = servicesTotal + viewingQuotation.additionalCharges;
-              const gstAmount = (totalBeforeGst * viewingQuotation.gstPercent) / 100;
-              return (
-                <div style={{ marginTop: '20px', padding: '15px', background: '#e9ecef', borderRadius: '4px', textAlign: 'right' }}>
-                  <p><strong>Services Total:</strong> {servicesTotal.toFixed(2)}</p>
-                  <p><strong>Additional Charges {viewingQuotation.additionalChargesDesc ? `(${viewingQuotation.additionalChargesDesc})` : ''}:</strong> {viewingQuotation.additionalCharges.toFixed(2)}</p>
-                  <p><strong>GST ({viewingQuotation.gstPercent}%):</strong> {gstAmount.toFixed(2)}</p>
-                  <h4><strong>Grand Total:</strong> {viewingQuotation.grandTotal.toFixed(2)}</h4>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '20px' }}>
+              <div style={{ width: '320px', background: '#f8f9fa', padding: '15px', borderRadius: '4px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <span>Subtotal:</span>
+                  <strong>₹{viewingQuotation.subtotal.toFixed(2)}</strong>
                 </div>
-              );
-            })()}
+                {viewingQuotation.additionalCharges > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <span>{viewingQuotation.additionalChargesDesc || 'Additional Charges'}:</span>
+                    <strong>₹{viewingQuotation.additionalCharges.toFixed(2)}</strong>
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <span>GST ({viewingQuotation.gstPercent}%):</span>
+                  <strong>₹{(((viewingQuotation.subtotal + viewingQuotation.additionalCharges) * viewingQuotation.gstPercent) / 100).toFixed(2)}</strong>
+                </div>
+                <hr style={{ margin: '8px 0', borderColor: '#dee2e6' }} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.1rem' }}>
+                  <strong>Grand Total:</strong>
+                  <strong>₹{viewingQuotation.grandTotal.toFixed(2)}</strong>
+                </div>
+              </div>
+            </div>
+
+            {viewingQuotation.termsAndConditions && (
+              <div className="quotation-terms-card">
+                <h5 className="terms-card-title">Terms & Conditions & Bank Details</h5>
+                <div className="terms-card-content">
+                  {viewingQuotation.termsAndConditions}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* View Invoice Preview */}
+        {activeTab === 'view_invoice' && viewingInvoice && (
+          <div id="invoice-details-pdf" style={{ padding: '20px', background: 'white' }}>
+            <div className="pdf-exclude-buttons" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+              <h4 className="section-title" style={{ margin: 0 }}>Invoice Details</h4>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  className="btn-action-green"
+                  style={{ width: 'auto', padding: '4px 12px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#3b82f6' }}
+                  onClick={() => handleDownloadInvoicePDF(viewingInvoice.invoiceNumber)}
+                >
+                  <MdDownload /> Download PDF
+                </button>
+                <button
+                  className="btn-remove-row"
+                  style={{ width: 'auto', padding: '4px 12px', fontSize: '0.85rem' }}
+                  onClick={() => {
+                    setActiveTab('invoices');
+                    setViewingInvoice(null);
+                  }}
+                >
+                  Back to List
+                </button>
+              </div>
+            </div>
+            
+            <div style={{ background: '#f8f9fa', padding: '15px', borderRadius: '4px', marginBottom: '20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <div><strong>Invoice No:</strong> {viewingInvoice.invoiceNumber}</div>
+              <div><strong>Date:</strong> {viewingInvoice.date}</div>
+              <div><strong>Customer:</strong> {viewingInvoice.customerName}</div>
+              <div><strong>Mobile:</strong> {viewingInvoice.mobile}</div>
+              <div><strong>Email:</strong> {viewingInvoice.email || 'N/A'}</div>
+              <div><strong>Company Name:</strong> {viewingInvoice.companyName || 'N/A'}</div>
+              <div><strong>GST Number:</strong> {viewingInvoice.gstNumber || 'N/A'}</div>
+              <div><strong>Address:</strong> {viewingInvoice.address || 'N/A'}</div>
+              <div><strong>Pincode:</strong> {viewingInvoice.pincode || 'N/A'}</div>
+            </div>
+
+            <div className="ref-table-wrapper" style={{ margin: '0 0 20px 0' }}>
+              <table className="quotations-list-table ref-table" style={{ border: 'none' }}>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Service Name</th>
+                    <th>Qty</th>
+                    <th>Cost</th>
+                    <th>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(viewingInvoice.items || []).map((it, idx) => (
+                    <tr key={it.id || idx}>
+                      <td>{idx + 1}</td>
+                      <td>{it.description}</td>
+                      <td>{it.qty}</td>
+                      <td>₹{it.rate.toFixed(2)}</td>
+                      <td>₹{it.amount.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '20px' }}>
+              <div style={{ width: '320px', background: '#f8f9fa', padding: '15px', borderRadius: '4px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <span>Subtotal:</span>
+                  <strong>₹{(viewingInvoice.subtotal || 0).toFixed(2)}</strong>
+                </div>
+                {viewingInvoice.additionalCharges > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <span>{viewingInvoice.additionalChargesDesc || 'Additional Charges'}:</span>
+                    <strong>₹{viewingInvoice.additionalCharges.toFixed(2)}</strong>
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <span>GST ({viewingInvoice.gstPercent}%):</span>
+                  <strong>₹{((((viewingInvoice.subtotal || 0) + (viewingInvoice.additionalCharges || 0)) * viewingInvoice.gstPercent) / 100).toFixed(2)}</strong>
+                </div>
+                <hr style={{ margin: '8px 0', borderColor: '#dee2e6' }} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.1rem' }}>
+                  <strong>Grand Total:</strong>
+                  <strong>₹{viewingInvoice.grandTotal.toFixed(2)}</strong>
+                </div>
+              </div>
+            </div>
+
+            {viewingInvoice.termsAndConditions && (
+              <div className="quotation-terms-card">
+                <h5 className="terms-card-title">Terms & Conditions & Bank Details</h5>
+                <div className="terms-card-content">
+                  {viewingInvoice.termsAndConditions}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

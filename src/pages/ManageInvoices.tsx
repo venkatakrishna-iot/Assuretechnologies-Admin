@@ -5,6 +5,7 @@ import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import type { Invoice, InvoiceItem } from '../types';
 import { isSameStateAsCompany, getGstStateCode } from '../data/gstStateCodes';
+import Pagination from '../components/Pagination';
 import './ManageInvoices.css';
 import { Toast } from '../utils/errorHandler';
 
@@ -30,6 +31,10 @@ export default function ManageInvoices() {
   const [activeTab, setActiveTab] = useState<'vendor_invoices' | 'service_invoices' | 'form' | 'view'>('vendor_invoices');
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [pendingSRs, setPendingSRs] = useState<MockSR[]>([]);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pendingSrPage, setPendingSrPage] = useState<number>(1);
+  const itemsPerPage = 10;
+  const pendingSrItemsPerPage = 10;
 
   useEffect(() => {
     fetchInvoices();
@@ -316,13 +321,25 @@ export default function ManageInvoices() {
     }
 
     try {
-      const canvas = await html2canvas(input, { scale: 2 });
+      const canvas = await html2canvas(input, { scale: 2, useCORS: true });
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-      
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position -= pageHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
       pdf.save(`Invoice_${invoiceNumber}.pdf`);
     } catch (err) {
       console.error('Failed to generate PDF', err);
@@ -340,7 +357,20 @@ export default function ManageInvoices() {
   };
 
   const isVendorInvoice = (inv: Invoice) => !isServiceInvoice(inv);
-  const displayedInvoices = invoices.filter(inv => activeTab === 'vendor_invoices' ? isVendorInvoice(inv) : isServiceInvoice(inv));
+  const filteredInvoices = invoices.filter(inv =>
+    activeTab === 'vendor_invoices' ? isVendorInvoice(inv) : isServiceInvoice(inv)
+  );
+  const totalPages = Math.ceil(filteredInvoices.length / itemsPerPage) || 1;
+  const paginatedInvoices = filteredInvoices.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  const totalPendingSrPages = Math.ceil(pendingSRs.length / pendingSrItemsPerPage) || 1;
+  const paginatedPendingSRs = pendingSRs.slice(
+    (pendingSrPage - 1) * pendingSrItemsPerPage,
+    pendingSrPage * pendingSrItemsPerPage
+  );
 
   return (
     <div className="manage-invoices">
@@ -349,13 +379,19 @@ export default function ManageInvoices() {
       <div className="invoice-tabs">
         <button
           className={`invoice-tab ${activeTab === 'vendor_invoices' ? 'active' : ''}`}
-          onClick={() => setActiveTab('vendor_invoices')}
+          onClick={() => {
+            setActiveTab('vendor_invoices');
+            setCurrentPage(1);
+          }}
         >
           Vendor Invoices
         </button>
         <button
           className={`invoice-tab ${activeTab === 'service_invoices' ? 'active' : ''}`}
-          onClick={() => setActiveTab('service_invoices')}
+          onClick={() => {
+            setActiveTab('service_invoices');
+            setCurrentPage(1);
+          }}
         >
           Service Invoices
         </button>
@@ -364,6 +400,7 @@ export default function ManageInvoices() {
           onClick={() => {
             setActiveTab('form');
             setSelectedSR(null); // Reset selection when clicking the tab
+            setPendingSrPage(1);
           }}
         >
           Generate Invoice
@@ -372,8 +409,9 @@ export default function ManageInvoices() {
 
       <div className="invoice-container">
         {(activeTab === 'vendor_invoices' || activeTab === 'service_invoices') && (
-          <div className="ref-table-wrapper" style={{ margin: 0 }}>
-            <table className="invoices-list-table ref-table" style={{ border: 'none' }}>
+          <>
+            <div className="ref-table-wrapper" style={{ margin: 0 }}>
+              <table className="invoices-list-table ref-table" style={{ border: 'none' }}>
               <thead>
                 <tr>
                   <th className='tableheadings'>Invoice No</th>
@@ -389,14 +427,14 @@ export default function ManageInvoices() {
                 </tr>
               </thead>
               <tbody>
-                {displayedInvoices.length === 0 ? (
+                {filteredInvoices.length === 0 ? (
                   <tr>
                     <td colSpan={activeTab === 'service_invoices' ? 10 : 9} style={{ padding: '40px', textAlign: 'center', color: '#333' }}>
                       No invoices generated yet
                     </td>
                   </tr>
                 ) : (
-                  displayedInvoices.map(inv => (
+                  paginatedInvoices.map(inv => (
                     <tr key={inv.id}>
                       <td><strong>{inv.invoiceNumber}</strong></td>
                       <td>
@@ -476,11 +514,18 @@ export default function ManageInvoices() {
               </tbody>
             </table>
           </div>
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+          />
+        </>
         )}
 
         {activeTab === 'form' && !selectedSR && (
-          <div className="ref-table-wrapper" style={{ margin: 0 }}>
-            <table className="invoices-list-table ref-table" style={{ border: 'none' }}>
+          <>
+            <div className="ref-table-wrapper" style={{ margin: 0 }}>
+              <table className="invoices-list-table ref-table" style={{ border: 'none' }}>
               <thead>
                 <tr>
                   <th>SR No</th>
@@ -491,31 +536,45 @@ export default function ManageInvoices() {
                 </tr>
               </thead>
               <tbody>
-                {pendingSRs.map(sr => (
-                  <tr key={sr.id}>
-                    <td>{sr.srNo}</td>
-                    <td>
-                      {sr.customerName}<br />
-                      <small className="text-muted">{sr.mobile}</small>
-                    </td>
-                    <td>
-                      {sr.service}<br />
-                      <small className="text-muted" style={{ color: '#6c757d' }}>{sr.category}</small>
-                    </td>
-                    <td>{sr.completedOn}</td>
-                    <td>
-                      <button
-                        className="btn-action-green"
-                        onClick={() => handleSelectSR(sr)}
-                      >
-                        Generate Invoice
-                      </button>
+                {pendingSRs.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} style={{ padding: '40px', textAlign: 'center', color: '#333' }}>
+                      No pending service requests
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  paginatedPendingSRs.map(sr => (
+                    <tr key={sr.id}>
+                      <td>{sr.srNo}</td>
+                      <td>
+                        {sr.customerName}<br />
+                        <small className="text-muted">{sr.mobile}</small>
+                      </td>
+                      <td>
+                        {sr.service}<br />
+                        <small className="text-muted" style={{ color: '#6c757d' }}>{sr.category}</small>
+                      </td>
+                      <td>{sr.completedOn}</td>
+                      <td>
+                        <button
+                          className="btn-action-green"
+                          onClick={() => handleSelectSR(sr)}
+                        >
+                          Generate Invoice
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
+          <Pagination
+            currentPage={pendingSrPage}
+            totalPages={totalPendingSrPages}
+            onPageChange={setPendingSrPage}
+          />
+        </>
         )}
 
         {activeTab === 'form' && selectedSR && (
@@ -781,6 +840,35 @@ export default function ManageInvoices() {
                 </div>
               );
             })()}
+
+            {/* Component Warranty Conditions (only for vendor/product invoices) */}
+            {!isServiceInvoice(viewingInvoice) && (
+              <div className="invoice-warranty-section">
+                <h5 className="invoice-warranty-title">Component Warranty Conditions</h5>
+                <ul className="invoice-warranty-list">
+                  <li>
+                    <strong>Manufacturer Warranty:</strong> Hardware components (cameras, NVRs/DVRs, hard drives) carry a 1-to-3-year manufacturer warranty from the date of purchase. The installer acts as the facilitator for these claims.
+                  </li>
+                  <li>
+                    <strong>Workmanship/Labor Warranty:</strong> Installation labor is typically covered for 90 days to 1 year. This covers faulty wiring, loose mounts, or incorrect configuration by the technicians.
+                  </li>
+                  <li>
+                    <strong>Warranty Exclusions:</strong> The warranty is strictly void under the following conditions:
+                    <ul className="invoice-warranty-sublist">
+                      <li>Damage caused by lightning strikes, power surges, floods, or acts of God.</li>
+                      <li>Vandalism, physical tampering, or unauthorized relocation of cameras.</li>
+                      <li>Modifications to software settings, network routing, or firmware updates done by the client or a third party.</li>
+                    </ul>
+                  </li>
+                  <li>
+                    <strong>Consumables Exclusion:</strong> Cables, connectors, power adapters, and batteries are generally excluded from long-term warranties or carry a heavily reduced coverage period (e.g., 90 days).
+                  </li>
+                  <li>
+                    <strong>Advance Replacement Policy:</strong> Defective components must be tested and verified before a replacement is issued. Loaner cameras during the manufacturer repair window are not included unless a separate Annual Maintenance Contract (AMC) is signed.
+                  </li>
+                </ul>
+              </div>
+            )}
           </div>
         )}
       </div>

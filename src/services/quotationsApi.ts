@@ -16,6 +16,7 @@ export interface CreateQuotationPayload {
   additional_charges_desc?: string;
   additional_charges?: number;
   gst_percent?: number;
+  terms_and_conditions?: string;
 }
 
 export const quotationsApi = {

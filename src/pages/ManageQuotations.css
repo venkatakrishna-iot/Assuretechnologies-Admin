@@ -185,7 +185,8 @@
   font-size: 0.9rem;
 }
 
-.btn-save-quotation {
+.btn-save-quotation,
+.btn-save-invoice {
   background-color: #007bff;
   color: #fff;
   border: none;
@@ -195,7 +196,8 @@
   cursor: pointer;
 }
 
-.btn-save-quotation:hover {
+.btn-save-quotation:hover,
+.btn-save-invoice:hover {
   background-color: #0069d9;
 }
 
@@ -224,3 +226,74 @@
   border-radius: 4px;
   cursor: pointer;
 }
+
+/* Quotation Terms & Conditions Section */
+.quotation-terms-edit-section {
+  margin-bottom: 20px;
+}
+
+.terms-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.btn-reset-terms {
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  background-color: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-reset-terms:hover {
+  background-color: #e2e8f0;
+  color: #1e293b;
+}
+
+.terms-textarea {
+  width: 100%;
+  font-family: inherit;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 180px;
+}
+
+.terms-hint {
+  color: #6c757d;
+  font-size: 0.8rem;
+  display: block;
+  margin-top: 5px;
+}
+
+/* Quotation View Terms & Conditions Display */
+.quotation-view-terms {
+  margin-top: 25px;
+  padding: 16px;
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+}
+
+.quotation-view-terms h5 {
+  margin: 0 0 10px 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #0f172a;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 6px;
+}
+
+.quotation-view-terms-content {
+  white-space: pre-line;
+  font-size: 0.83rem;
+  color: #334155;
+  line-height: 1.6;
+}
+
