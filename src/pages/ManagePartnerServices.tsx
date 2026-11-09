@@ -111,15 +111,10 @@ export default function ManagePartnerServices() {
       }
 
       if (isEditing) {
-        // Assume PUT /api/admin/services/:id exists, or handle edit later. For now just updating API logic structure.
-        await API.put(`/admin/services/${serviceData.id}`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
+        await API.put(`/admin/services/${serviceData.id}`, formData);
         Swal.fire('Updated!', 'Partner service updated successfully.', 'success');
       } else {
-        await API.post('/admin/services', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
+        await API.post('/admin/services', formData);
         Swal.fire('Added!', 'New partner service added successfully.', 'success');
       }
       
