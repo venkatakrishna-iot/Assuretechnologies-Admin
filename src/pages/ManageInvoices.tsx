@@ -74,58 +74,77 @@ export default function ManageInvoices() {
         console.error('Failed to pre-fetch vendors for GST lookup', e);
       }
       const response = await API.get('/invoices/admin');
-      const fetchedInvoices = response.data.data.map((inv: any) => ({
-        id: inv.id,
-        invoiceNumber: inv.invoice_number,
-        customerName: inv.customer_name,
-        mobile: inv.mobile,
-        email: inv.email,
-        address: inv.address,
-        items: inv.items.map((i: any) => ({
-          id: i.id,
-          description: i.description,
-          qty: i.qty,
-          rate: parseFloat(i.rate) || 0,
-          amount: parseFloat(i.amount) || 0,
-          warranty: i.warranty,
-          modelNumber: i.model_number,
-          hsnCode: i.hsn_code,
-          serialNumbers: (() => {
-            let sn = i.serial_numbers;
-            if (typeof sn === 'string') {
-              try {
-                const parsed = JSON.parse(sn);
-                sn = parsed;
-              } catch(e) {
-                sn = sn.split(',').map((s: string) => s.trim()).filter(Boolean);
+      const fetchedInvoices = response.data.data.map((inv: any) => {
+        const isVendorInvoice = inv.type === 'VENDOR';
+        const slab = parseFloat(inv.gst_percent) || 18;
+        const mappedItems = (inv.items || []).map((i: any) => {
+          const qty = parseInt(i.qty, 10) || 1;
+          const rawRate = parseFloat(i.rate) || 0;
+          const rawAmount = parseFloat(i.amount) || 0;
+
+          const rateIncl = rawRate;
+          const rateExcl = rawAmount > 0 ? (rawAmount / qty) : (rateIncl / (1 + (slab / 100)));
+          const amount = isVendorInvoice ? (rawAmount > 0 ? rawAmount : parseFloat((rateExcl * qty).toFixed(2))) : rawAmount;
+
+          return {
+            id: i.id,
+            description: i.description,
+            qty,
+            rate: isVendorInvoice ? parseFloat(rateIncl.toFixed(2)) : rawRate,
+            amount: parseFloat(amount.toFixed(2)),
+            warranty: i.warranty,
+            modelNumber: i.model_number,
+            hsnCode: i.hsn_code,
+            serialNumbers: (() => {
+              let sn = i.serial_numbers;
+              if (typeof sn === 'string') {
+                try {
+                  sn = JSON.parse(sn);
+                } catch(e) {
+                  sn = sn.split(',').map((s: string) => s.trim()).filter(Boolean);
+                }
               }
-            }
-            return Array.isArray(sn) ? sn : (typeof sn === 'string' ? [sn] : []);
-          })()
-        })),
-        additionalChargesDesc: inv.additional_charges_desc,
-        additionalCharges: parseFloat(inv.additional_charges) || 0,
-        gstPercent: parseFloat(inv.gst_percent) || 0,
-        grandTotal: parseFloat(inv.grand_total) || 0,
-        date: new Date(inv.createdAt).toLocaleString(),
-        status: inv.status,
-        serviceName: inv.type === 'VENDOR' 
-          ? (inv.product_name || inv.items?.[0]?.description || 'Product') 
-          : (inv.service_name 
-              || inv.items?.find((i: any) => i.description && (i.description.includes(' - ') || i.description.toLowerCase().includes('solution') || i.description.toLowerCase().includes('service') || i.description.toLowerCase().includes('networking') || i.description.toLowerCase().includes('drone') || i.description.toLowerCase().includes('tractor')))?.description 
-              || inv.items?.find((i: any) => i.description && !i.description.toLowerCase().startsWith('a/c'))?.description
-              || inv.items?.[0]?.description 
-              || 'Service'),
-        soldBy: inv.sold_by || inv.vendor?.business_name || inv.vendor?.full_name || (inv.type === 'VENDOR' ? 'Assure Technologies' : '-'),
-        vendorBusinessName: inv.vendor?.business_name || inv.vendor?.full_name || '',
-        vendorGstin: inv.vendor?.gst_number || inv.vendor_gstin || (inv.vendor_id ? vendorMap[inv.vendor_id] : '') || vendorMap[((inv.vendor?.business_name || inv.vendor?.full_name || inv.sold_by || '').toLowerCase().trim())] || '',
-        vendorGstStateCode: inv.vendor_gst_state_code || inv.vendor?.gst_state_code || (inv.vendor?.gst_number ? inv.vendor.gst_number.slice(0, 2) : '') || '',
-        customerGstin: inv.gst_number || inv.customer?.gst_number || '',
-        gstStateCode: inv.gst_state_code || (inv.gst_number ? inv.gst_number.slice(0, 2) : ''),
-        orderId: inv.order_id,
-        type: inv.type,
-        isPartner: Boolean(inv.is_partner || (inv.service_name && (inv.service_name.toLowerCase().includes('harvester') || inv.service_name.toLowerCase().includes('tractor') || inv.service_name.toLowerCase().includes('drone'))))
-      }));
+              return Array.isArray(sn) ? sn : (typeof sn === 'string' ? [sn] : []);
+            })()
+          };
+        });
+
+        const calculatedGrandTotal = isVendorInvoice
+          ? mappedItems.reduce((acc: number, curr: any) => acc + (curr.rate * curr.qty), 0)
+          : (parseFloat(inv.grand_total) || 0);
+
+        return {
+          id: inv.id,
+          invoiceNumber: inv.invoice_number,
+          customerName: inv.customer_name,
+          mobile: inv.mobile,
+          email: inv.email,
+          address: inv.address,
+          items: mappedItems,
+          additionalChargesDesc: inv.additional_charges_desc,
+          additionalCharges: parseFloat(inv.additional_charges) || 0,
+          gstPercent: parseFloat(inv.gst_percent) || 0,
+          grandTotal: calculatedGrandTotal,
+          date: new Date(inv.createdAt).toLocaleString(),
+          status: inv.status,
+          serviceName: inv.type === 'VENDOR' 
+            ? (inv.product_name || inv.items?.[0]?.description || 'Product') 
+            : (inv.service_name 
+                || inv.items?.find((i: any) => i.description && (i.description.includes(' - ') || i.description.toLowerCase().includes('solution') || i.description.toLowerCase().includes('service') || i.description.toLowerCase().includes('networking') || i.description.toLowerCase().includes('drone') || i.description.toLowerCase().includes('tractor')))?.description 
+                || inv.items?.find((i: any) => i.description && !i.description.toLowerCase().startsWith('a/c'))?.description
+                || inv.items?.[0]?.description 
+                || 'Service'),
+          soldBy: inv.sold_by || inv.vendor?.business_name || inv.vendor?.full_name || (inv.type === 'VENDOR' ? 'Assure Technologies' : '-'),
+          vendorBusinessName: inv.vendor?.business_name || inv.vendor?.full_name || '',
+          vendorGstin: inv.vendor?.gst_number || inv.vendor_gstin || (inv.vendor_id ? vendorMap[inv.vendor_id] : '') || vendorMap[((inv.vendor?.business_name || inv.vendor?.full_name || inv.sold_by || '').toLowerCase().trim())] || '',
+          vendorGstStateCode: inv.vendor_gst_state_code || inv.vendor?.gst_state_code || (inv.vendor?.gst_number ? inv.vendor.gst_number.slice(0, 2) : '') || '',
+          customerGstin: inv.gst_number || inv.customer?.gst_number || '',
+          gstStateCode: inv.gst_state_code || (inv.gst_number ? inv.gst_number.slice(0, 2) : ''),
+          orderId: inv.order_id,
+          type: inv.type,
+          isPartner: Boolean(inv.is_partner || (inv.service_name && (inv.service_name.toLowerCase().includes('harvester') || inv.service_name.toLowerCase().includes('tractor') || inv.service_name.toLowerCase().includes('drone'))))
+        };
+      });
       setInvoices(fetchedInvoices);
     } catch (err) {
       console.error('Failed to fetch invoices', err);
@@ -763,12 +782,9 @@ export default function ManageInvoices() {
                   {viewingInvoice.items.map((item, idx) => {
                     const gstPct = viewingInvoice.gstPercent || 18;
                     const qty = item.qty || 1;
-                    const rateExcl = (item.amount && item.amount < (item.rate * qty))
-                      ? (item.amount / qty)
-                      : item.rate;
-                    const rateIncl = (item.rate > rateExcl)
-                      ? item.rate
-                      : (rateExcl * (1 + (gstPct / 100)));
+                    const isVendor = viewingInvoice.type === 'VENDOR' || !!viewingInvoice.vendorBusinessName;
+                    const rateIncl = isVendor ? item.rate : (item.rate > (item.amount / qty) ? item.rate : (item.amount / qty) * (1 + (gstPct / 100)));
+                    const rateExcl = isVendor ? (item.amount ? item.amount / qty : rateIncl / (1 + (gstPct / 100))) : (item.amount / qty);
                     const amount = item.amount || (rateExcl * qty);
 
                     return (
@@ -794,12 +810,11 @@ export default function ManageInvoices() {
               const isVendorInvoice = viewingInvoice.type === 'VENDOR' || !!viewingInvoice.vendorBusinessName;
 
               if (isVendorInvoice) {
-                const total = viewingInvoice.grandTotal > 0 ? viewingInvoice.grandTotal : itemsTotal;
-                const gstPercent = viewingInvoice.gstPercent || 18;
-                const gst = viewingInvoice.grandTotal > itemsTotal && itemsTotal > 0
-                  ? (viewingInvoice.grandTotal - itemsTotal)
-                  : (total - (total / (1 + (gstPercent / 100))));
-                const taxable = total - gst;
+                const taxable = itemsTotal;
+                const total = viewingInvoice.grandTotal > 0
+                  ? viewingInvoice.grandTotal
+                  : viewingInvoice.items.reduce((sum, item) => sum + (item.rate * item.qty), 0);
+                const gst = parseFloat((total - taxable).toFixed(2));
                 const vendorCode = viewingInvoice.vendorGstStateCode || (viewingInvoice.vendorGstin ? viewingInvoice.vendorGstin.slice(0, 2) : '');
                 const isIntraState = isSameStateAsCompany(vendorCode);
 

@@ -223,6 +223,7 @@ export interface Quotation {
   gstPercent: number;
   grandTotal: number;
   termsAndConditions?: string;
+  taxType?: 'GST' | 'IGST';
   services: QuotationService[];
   date: string;
 }
@@ -270,6 +271,7 @@ export interface Invoice {
   pincode?: string;
   termsAndConditions?: string;
   isManual?: boolean;
+  taxType?: 'GST' | 'IGST';
 }
 
 export interface PartnerCustomField {

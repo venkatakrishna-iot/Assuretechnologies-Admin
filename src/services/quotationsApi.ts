@@ -17,6 +17,7 @@ export interface CreateQuotationPayload {
   additional_charges?: number;
   gst_percent?: number;
   terms_and_conditions?: string;
+  tax_type?: 'GST' | 'IGST';
 }
 
 export const quotationsApi = {

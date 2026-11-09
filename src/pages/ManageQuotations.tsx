@@ -48,6 +48,77 @@ IFSC - IDIB000K088, A. Konduru Branch`;
 
 type TabType = 'quotations' | 'generate_quotation' | 'invoices' | 'generate_invoice' | 'view_quotation' | 'view_invoice';
 
+function renderFormattedTerms(rawTerms: string) {
+  if (!rawTerms || !rawTerms.trim()) return null;
+
+  const sections = rawTerms.split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
+
+  return sections.map((section, secIdx) => {
+    const lines = section.split('\n').map(l => l.trim()).filter(Boolean);
+    const isBankSection = section.toLowerCase().includes("bank details") || section.toLowerCase().includes("in favor of");
+
+    if (isBankSection) {
+      return (
+        <div key={secIdx} className="terms-bank-box">
+          <div className="terms-bank-title">
+            <span>🏦 Company's Bank Details</span>
+          </div>
+          {lines
+            .filter(l => !l.toLowerCase().includes("company's bank details") && !l.toLowerCase().includes("bank details"))
+            .map((line, lIdx) => (
+              <div key={lIdx} className="terms-bank-line">{line}</div>
+            ))
+          }
+        </div>
+      );
+    }
+
+    return (
+      <div key={secIdx} className="terms-section-block">
+        {lines.map((line, lIdx) => {
+          if (line.startsWith('•') || line.startsWith('-')) {
+            const content = line.replace(/^[•\-]\s*/, '');
+            const colonIdx = content.indexOf(':');
+            if (colonIdx !== -1) {
+              const title = content.substring(0, colonIdx + 1);
+              const text = content.substring(colonIdx + 1);
+              return (
+                <div key={lIdx} className="terms-bullet-item">
+                  <span className="terms-bullet-dot">•</span>
+                  <span className="terms-bullet-text">
+                    <strong>{title}</strong>{text}
+                  </span>
+                </div>
+              );
+            }
+            return (
+              <div key={lIdx} className="terms-bullet-item">
+                <span className="terms-bullet-dot">•</span>
+                <span className="terms-bullet-text">{content}</span>
+              </div>
+            );
+          }
+
+          if (line.startsWith('◦') || line.startsWith('*')) {
+            return (
+              <div key={lIdx} className="terms-sub-bullet-item">
+                <span className="terms-bullet-dot">◦</span>
+                <span className="terms-bullet-text">{line.replace(/^[◦\*]\s*/, '')}</span>
+              </div>
+            );
+          }
+
+          if (lIdx === 0 && (line.toLowerCase().includes('terms') || line.toLowerCase().includes('conditions') || line.length < 45)) {
+            return <div key={lIdx} className="terms-subheading">{line}</div>;
+          }
+
+          return <div key={lIdx} className="terms-regular-line">{line}</div>;
+        })}
+      </div>
+    );
+  });
+}
+
 export default function ManageQuotations() {
   const [activeTab, setActiveTab] = useState<TabType>('quotations');
   const [viewingQuotation, setViewingQuotation] = useState<Quotation | null>(null);
@@ -78,6 +149,7 @@ export default function ManageQuotations() {
   const [additionalChargesDesc, setAdditionalChargesDesc] = useState('');
   const [additionalCharges, setAdditionalCharges] = useState<number>(0);
   const [gstPercent, setGstPercent] = useState<number>(18);
+  const [taxType, setTaxType] = useState<'GST' | 'IGST'>('GST');
   const [termsAndConditions, setTermsAndConditions] = useState<string>(DEFAULT_QUOTATION_TERMS);
 
   // Quotation Derived calculations
@@ -102,6 +174,7 @@ export default function ManageQuotations() {
   const [invAdditionalChargesDesc, setInvAdditionalChargesDesc] = useState('');
   const [invAdditionalCharges, setInvAdditionalCharges] = useState<number>(0);
   const [invGstPercent, setInvGstPercent] = useState<number>(18);
+  const [invTaxType, setInvTaxType] = useState<'GST' | 'IGST'>('GST');
   const [invTermsAndConditions, setInvTermsAndConditions] = useState<string>(DEFAULT_INVOICE_TERMS);
 
   // Invoice Derived calculations
@@ -150,6 +223,7 @@ export default function ManageQuotations() {
           gstPercent: parseFloat(q.gst_percent || 18),
           grandTotal: parseFloat(q.grand_total || 0),
           termsAndConditions: q.terms_and_conditions || DEFAULT_QUOTATION_TERMS,
+          taxType: (q.tax_type as 'GST' | 'IGST') || (q.gst_number && !q.gst_number.startsWith('37') ? 'IGST' : 'GST'),
           services: (q.items || []).map((it: any) => ({
             id: it.id,
             name: it.service_name,
@@ -194,6 +268,7 @@ export default function ManageQuotations() {
           date: inv.createdAt ? new Date(inv.createdAt).toLocaleDateString() : '',
           status: inv.status || 'Paid',
           isManual: true,
+          taxType: (inv.tax_type as 'GST' | 'IGST') || (inv.gst_number && !inv.gst_number.startsWith('37') ? 'IGST' : 'GST'),
           items: (inv.items || []).map((it: any) => ({
             id: it.id,
             description: it.description,
@@ -315,6 +390,7 @@ export default function ManageQuotations() {
         additional_charges_desc: additionalChargesDesc.trim() || undefined,
         additional_charges: additionalCharges || 0,
         gst_percent: gstPercent,
+        tax_type: taxType,
         terms_and_conditions: termsAndConditions.trim() || undefined
       };
 
@@ -339,6 +415,7 @@ export default function ManageQuotations() {
       setAdditionalChargesDesc('');
       setAdditionalCharges(0);
       setGstPercent(18);
+      setTaxType('GST');
       setTermsAndConditions(DEFAULT_QUOTATION_TERMS);
 
       // Refresh list & switch to table
@@ -397,6 +474,7 @@ export default function ManageQuotations() {
         additionalCharges: invAdditionalCharges || 0,
         gstPercent: invGstPercent,
         grandTotal: invGrandTotal,
+        taxType: invTaxType,
         termsAndConditions: invTermsAndConditions.trim() || undefined,
         isManual: true
       };
@@ -422,6 +500,7 @@ export default function ManageQuotations() {
       setInvAdditionalChargesDesc('');
       setInvAdditionalCharges(0);
       setInvGstPercent(18);
+      setInvTaxType('GST');
       setInvTermsAndConditions(DEFAULT_INVOICE_TERMS);
 
       // Refresh list & switch to invoices table
@@ -835,19 +914,43 @@ export default function ManageQuotations() {
               />
             </div>
 
-            <div className="calc-grid-3">
-              <input 
-                type="number" 
-                className="ref-input" 
-                placeholder="18" 
-                value={gstPercent}
-                onChange={e => setGstPercent(parseFloat(e.target.value) || 0)}
-              />
-              <div className="ref-readonly">
-                {gstAmount.toFixed(2)}
+            <div className="calc-grid-4">
+              <div>
+                <label style={{ fontSize: '0.82rem', color: '#64748b', display: 'block', marginBottom: '4px' }}>Tax Type</label>
+                <select 
+                  className="ref-input" 
+                  value={taxType} 
+                  onChange={e => setTaxType(e.target.value as 'GST' | 'IGST')}
+                  style={{ width: '100%', height: '42px', padding: '8px', borderRadius: '4px', border: '1px solid #ced4da' }}
+                >
+                  <option value="GST">GST (CGST + SGST)</option>
+                  <option value="IGST">IGST (Inter-State)</option>
+                </select>
               </div>
-              <div className="ref-readonly">
-                {grandTotal.toFixed(2)}
+              <div>
+                <label style={{ fontSize: '0.82rem', color: '#64748b', display: 'block', marginBottom: '4px' }}>GST Rate (%)</label>
+                <input 
+                  type="number" 
+                  className="ref-input" 
+                  placeholder="18" 
+                  value={gstPercent}
+                  onChange={e => setGstPercent(parseFloat(e.target.value) || 0)}
+                  style={{ height: '42px' }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.82rem', color: '#64748b', display: 'block', marginBottom: '4px' }}>
+                  {taxType === 'GST' ? 'CGST + SGST' : 'IGST Amount'}
+                </label>
+                <div className="ref-readonly" style={{ height: '42px', display: 'flex', alignItems: 'center' }}>
+                  {gstAmount.toFixed(2)} {taxType === 'GST' ? `(CGST: ${(gstAmount / 2).toFixed(2)}, SGST: ${(gstAmount / 2).toFixed(2)})` : ''}
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize: '0.82rem', color: '#64748b', display: 'block', marginBottom: '4px' }}>Grand Total</label>
+                <div className="ref-readonly" style={{ height: '42px', display: 'flex', alignItems: 'center', fontWeight: 700, color: '#0f172a' }}>
+                  {grandTotal.toFixed(2)}
+                </div>
               </div>
             </div>
 
@@ -1117,19 +1220,43 @@ export default function ManageQuotations() {
               />
             </div>
 
-            <div className="calc-grid-3">
-              <input 
-                type="number" 
-                className="ref-input" 
-                placeholder="18" 
-                value={invGstPercent}
-                onChange={e => setInvGstPercent(parseFloat(e.target.value) || 0)}
-              />
-              <div className="ref-readonly">
-                {invGstAmount.toFixed(2)}
+            <div className="calc-grid-4">
+              <div>
+                <label style={{ fontSize: '0.82rem', color: '#64748b', display: 'block', marginBottom: '4px' }}>Tax Type</label>
+                <select 
+                  className="ref-input" 
+                  value={invTaxType} 
+                  onChange={e => setInvTaxType(e.target.value as 'GST' | 'IGST')}
+                  style={{ width: '100%', height: '42px', padding: '8px', borderRadius: '4px', border: '1px solid #ced4da' }}
+                >
+                  <option value="GST">GST (CGST + SGST)</option>
+                  <option value="IGST">IGST (Inter-State)</option>
+                </select>
               </div>
-              <div className="ref-readonly">
-                {invGrandTotal.toFixed(2)}
+              <div>
+                <label style={{ fontSize: '0.82rem', color: '#64748b', display: 'block', marginBottom: '4px' }}>GST Rate (%)</label>
+                <input 
+                  type="number" 
+                  className="ref-input" 
+                  placeholder="18" 
+                  value={invGstPercent}
+                  onChange={e => setInvGstPercent(parseFloat(e.target.value) || 0)}
+                  style={{ height: '42px' }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.82rem', color: '#64748b', display: 'block', marginBottom: '4px' }}>
+                  {invTaxType === 'GST' ? 'CGST + SGST' : 'IGST Amount'}
+                </label>
+                <div className="ref-readonly" style={{ height: '42px', display: 'flex', alignItems: 'center' }}>
+                  {invGstAmount.toFixed(2)} {invTaxType === 'GST' ? `(CGST: ${(invGstAmount / 2).toFixed(2)}, SGST: ${(invGstAmount / 2).toFixed(2)})` : ''}
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize: '0.82rem', color: '#64748b', display: 'block', marginBottom: '4px' }}>Grand Total</label>
+                <div className="ref-readonly" style={{ height: '42px', display: 'flex', alignItems: 'center', fontWeight: 700, color: '#0f172a' }}>
+                  {invGrandTotal.toFixed(2)}
+                </div>
               </div>
             </div>
 
@@ -1191,16 +1318,57 @@ export default function ManageQuotations() {
               </div>
             </div>
             
-            <div style={{ background: '#f8f9fa', padding: '15px', borderRadius: '4px', marginBottom: '20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-              <div><strong>Quotation No:</strong> {viewingQuotation.quotationNumber}</div>
-              <div><strong>Date:</strong> {viewingQuotation.date}</div>
-              <div><strong>Customer:</strong> {viewingQuotation.customerName}</div>
-              <div><strong>Mobile:</strong> {viewingQuotation.mobile}</div>
-              <div><strong>Email:</strong> {viewingQuotation.email || 'N/A'}</div>
-              <div><strong>Company Name:</strong> {viewingQuotation.companyName || 'N/A'}</div>
-              <div><strong>GST Number:</strong> {viewingQuotation.gstNumber || 'N/A'}</div>
-              <div><strong>Address:</strong> {viewingQuotation.address || 'N/A'}</div>
-              <div><strong>Pincode:</strong> {viewingQuotation.pincode || 'N/A'}</div>
+            <div style={{ background: '#f8f9fa', padding: '18px 20px', borderRadius: '6px', marginBottom: '20px', display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '24px', border: '1px solid #e2e8f0' }}>
+              {/* Left Column: Customer & Document Details */}
+              <div>
+                <div style={{ fontSize: '0.85rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px', marginBottom: '8px' }}>
+                  Quotation Details & Bill To
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '4px 12px', fontSize: '0.9rem', color: '#1e293b' }}>
+                  <strong>Quotation No:</strong> <span>{viewingQuotation.quotationNumber}</span>
+                  <strong>Date:</strong> <span>{viewingQuotation.date}</span>
+                  <strong>Customer:</strong> <span>{viewingQuotation.customerName}</span>
+                  {viewingQuotation.companyName && (
+                    <>
+                      <strong>Company:</strong> <span style={{ fontWeight: 600 }}>{viewingQuotation.companyName}</span>
+                    </>
+                  )}
+                  <strong>Mobile:</strong> <span>{viewingQuotation.mobile}</span>
+                  {viewingQuotation.email && (
+                    <>
+                      <strong>Email:</strong> <span>{viewingQuotation.email}</span>
+                    </>
+                  )}
+                  {viewingQuotation.gstNumber && (
+                    <>
+                      <strong>GSTIN:</strong> <span style={{ fontWeight: 600 }}>{viewingQuotation.gstNumber}</span>
+                    </>
+                  )}
+                  {viewingQuotation.address && (
+                    <>
+                      <strong>Address:</strong> <span>{viewingQuotation.address}{viewingQuotation.pincode ? ` - ${viewingQuotation.pincode}` : ''}</span>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Right Column: Assure Technologies Details */}
+              <div style={{ borderLeft: '1px solid #cbd5e1', paddingLeft: '20px' }}>
+                <div style={{ fontSize: '0.85rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px', marginBottom: '8px' }}>
+                  Issued By
+                </div>
+                <div style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>
+                  Assure Technologies
+                </div>
+                <div style={{ fontSize: '0.88rem', color: '#475569', lineHeight: '1.5' }}>
+                  1st Floor, 5-15 Shop No 1,<br />
+                  Dandu Venkata Ramaiah Commercial,<br />
+                  A Konduru, NTR District, Andhra Pradesh - 521227
+                </div>
+                <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#0f172a', marginTop: '6px' }}>
+                  GSTIN: 37DJPPN2516B1Z9
+                </div>
+              </div>
             </div>
 
             <div className="ref-table-wrapper" style={{ margin: '0 0 20px 0' }}>
@@ -1228,35 +1396,56 @@ export default function ManageQuotations() {
               </table>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '20px' }}>
-              <div style={{ width: '320px', background: '#f8f9fa', padding: '15px', borderRadius: '4px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                  <span>Subtotal:</span>
-                  <strong>₹{viewingQuotation.subtotal.toFixed(2)}</strong>
-                </div>
-                {viewingQuotation.additionalCharges > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                    <span>{viewingQuotation.additionalChargesDesc || 'Additional Charges'}:</span>
-                    <strong>₹{viewingQuotation.additionalCharges.toFixed(2)}</strong>
+            {(() => {
+              const taxableBase = viewingQuotation.subtotal + viewingQuotation.additionalCharges;
+              const gstAmount = (taxableBase * viewingQuotation.gstPercent) / 100;
+              const isIgst = viewingQuotation.taxType === 'IGST';
+
+              return (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '20px' }}>
+                  <div style={{ width: '340px', background: '#f8f9fa', padding: '15px 18px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                      <span>Subtotal:</span>
+                      <strong>₹{viewingQuotation.subtotal.toFixed(2)}</strong>
+                    </div>
+                    {viewingQuotation.additionalCharges > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                        <span>{viewingQuotation.additionalChargesDesc || 'Additional Charges'}:</span>
+                        <strong>₹{viewingQuotation.additionalCharges.toFixed(2)}</strong>
+                      </div>
+                    )}
+                    {isIgst ? (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                        <span>IGST ({viewingQuotation.gstPercent}%):</span>
+                        <strong>₹{gstAmount.toFixed(2)}</strong>
+                      </div>
+                    ) : (
+                      <>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                          <span>CGST ({(viewingQuotation.gstPercent / 2).toFixed(1)}%):</span>
+                          <strong>₹{(gstAmount / 2).toFixed(2)}</strong>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                          <span>SGST ({(viewingQuotation.gstPercent / 2).toFixed(1)}%):</span>
+                          <strong>₹{(gstAmount / 2).toFixed(2)}</strong>
+                        </div>
+                      </>
+                    )}
+                    <hr style={{ margin: '8px 0', borderColor: '#cbd5e1' }} />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.1rem', color: '#0f172a' }}>
+                      <strong>Grand Total:</strong>
+                      <strong>₹{viewingQuotation.grandTotal.toFixed(2)}</strong>
+                    </div>
                   </div>
-                )}
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                  <span>GST ({viewingQuotation.gstPercent}%):</span>
-                  <strong>₹{(((viewingQuotation.subtotal + viewingQuotation.additionalCharges) * viewingQuotation.gstPercent) / 100).toFixed(2)}</strong>
                 </div>
-                <hr style={{ margin: '8px 0', borderColor: '#dee2e6' }} />
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.1rem' }}>
-                  <strong>Grand Total:</strong>
-                  <strong>₹{viewingQuotation.grandTotal.toFixed(2)}</strong>
-                </div>
-              </div>
-            </div>
+              );
+            })()}
 
             {viewingQuotation.termsAndConditions && (
               <div className="quotation-terms-card">
                 <h5 className="terms-card-title">Terms & Conditions & Bank Details</h5>
                 <div className="terms-card-content">
-                  {viewingQuotation.termsAndConditions}
+                  {renderFormattedTerms(viewingQuotation.termsAndConditions)}
                 </div>
               </div>
             )}
@@ -1289,16 +1478,57 @@ export default function ManageQuotations() {
               </div>
             </div>
             
-            <div style={{ background: '#f8f9fa', padding: '15px', borderRadius: '4px', marginBottom: '20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-              <div><strong>Invoice No:</strong> {viewingInvoice.invoiceNumber}</div>
-              <div><strong>Date:</strong> {viewingInvoice.date}</div>
-              <div><strong>Customer:</strong> {viewingInvoice.customerName}</div>
-              <div><strong>Mobile:</strong> {viewingInvoice.mobile}</div>
-              <div><strong>Email:</strong> {viewingInvoice.email || 'N/A'}</div>
-              <div><strong>Company Name:</strong> {viewingInvoice.companyName || 'N/A'}</div>
-              <div><strong>GST Number:</strong> {viewingInvoice.gstNumber || 'N/A'}</div>
-              <div><strong>Address:</strong> {viewingInvoice.address || 'N/A'}</div>
-              <div><strong>Pincode:</strong> {viewingInvoice.pincode || 'N/A'}</div>
+            <div style={{ background: '#f8f9fa', padding: '18px 20px', borderRadius: '6px', marginBottom: '20px', display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '24px', border: '1px solid #e2e8f0' }}>
+              {/* Left Column: Customer & Document Details */}
+              <div>
+                <div style={{ fontSize: '0.85rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px', marginBottom: '8px' }}>
+                  Invoice Details & Bill To
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '4px 12px', fontSize: '0.9rem', color: '#1e293b' }}>
+                  <strong>Invoice No:</strong> <span>{viewingInvoice.invoiceNumber}</span>
+                  <strong>Date:</strong> <span>{viewingInvoice.date}</span>
+                  <strong>Customer:</strong> <span>{viewingInvoice.customerName}</span>
+                  {viewingInvoice.companyName && (
+                    <>
+                      <strong>Company:</strong> <span style={{ fontWeight: 600 }}>{viewingInvoice.companyName}</span>
+                    </>
+                  )}
+                  <strong>Mobile:</strong> <span>{viewingInvoice.mobile}</span>
+                  {viewingInvoice.email && (
+                    <>
+                      <strong>Email:</strong> <span>{viewingInvoice.email}</span>
+                    </>
+                  )}
+                  {viewingInvoice.gstNumber && (
+                    <>
+                      <strong>GSTIN:</strong> <span style={{ fontWeight: 600 }}>{viewingInvoice.gstNumber}</span>
+                    </>
+                  )}
+                  {viewingInvoice.address && (
+                    <>
+                      <strong>Address:</strong> <span>{viewingInvoice.address}{viewingInvoice.pincode ? ` - ${viewingInvoice.pincode}` : ''}</span>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Right Column: Assure Technologies Details */}
+              <div style={{ borderLeft: '1px solid #cbd5e1', paddingLeft: '20px' }}>
+                <div style={{ fontSize: '0.85rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px', marginBottom: '8px' }}>
+                  Issued By
+                </div>
+                <div style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>
+                  Assure Technologies
+                </div>
+                <div style={{ fontSize: '0.88rem', color: '#475569', lineHeight: '1.5' }}>
+                  1st Floor, 5-15 Shop No 1,<br />
+                  Dandu Venkata Ramaiah Commercial,<br />
+                  A Konduru, NTR District, Andhra Pradesh - 521227
+                </div>
+                <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#0f172a', marginTop: '6px' }}>
+                  GSTIN: 37DJPPN2516B1Z9
+                </div>
+              </div>
             </div>
 
             <div className="ref-table-wrapper" style={{ margin: '0 0 20px 0' }}>
@@ -1326,35 +1556,56 @@ export default function ManageQuotations() {
               </table>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '20px' }}>
-              <div style={{ width: '320px', background: '#f8f9fa', padding: '15px', borderRadius: '4px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                  <span>Subtotal:</span>
-                  <strong>₹{(viewingInvoice.subtotal || 0).toFixed(2)}</strong>
-                </div>
-                {viewingInvoice.additionalCharges > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                    <span>{viewingInvoice.additionalChargesDesc || 'Additional Charges'}:</span>
-                    <strong>₹{viewingInvoice.additionalCharges.toFixed(2)}</strong>
+            {(() => {
+              const taxableBase = (viewingInvoice.subtotal || 0) + (viewingInvoice.additionalCharges || 0);
+              const gstAmount = (taxableBase * viewingInvoice.gstPercent) / 100;
+              const isIgst = viewingInvoice.taxType === 'IGST';
+
+              return (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '20px' }}>
+                  <div style={{ width: '340px', background: '#f8f9fa', padding: '15px 18px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                      <span>Subtotal:</span>
+                      <strong>₹{(viewingInvoice.subtotal || 0).toFixed(2)}</strong>
+                    </div>
+                    {viewingInvoice.additionalCharges > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                        <span>{viewingInvoice.additionalChargesDesc || 'Additional Charges'}:</span>
+                        <strong>₹{viewingInvoice.additionalCharges.toFixed(2)}</strong>
+                      </div>
+                    )}
+                    {isIgst ? (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                        <span>IGST ({viewingInvoice.gstPercent}%):</span>
+                        <strong>₹{gstAmount.toFixed(2)}</strong>
+                      </div>
+                    ) : (
+                      <>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                          <span>CGST ({(viewingInvoice.gstPercent / 2).toFixed(1)}%):</span>
+                          <strong>₹{(gstAmount / 2).toFixed(2)}</strong>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                          <span>SGST ({(viewingInvoice.gstPercent / 2).toFixed(1)}%):</span>
+                          <strong>₹{(gstAmount / 2).toFixed(2)}</strong>
+                        </div>
+                      </>
+                    )}
+                    <hr style={{ margin: '8px 0', borderColor: '#cbd5e1' }} />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.1rem', color: '#0f172a' }}>
+                      <strong>Grand Total:</strong>
+                      <strong>₹{viewingInvoice.grandTotal.toFixed(2)}</strong>
+                    </div>
                   </div>
-                )}
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                  <span>GST ({viewingInvoice.gstPercent}%):</span>
-                  <strong>₹{((((viewingInvoice.subtotal || 0) + (viewingInvoice.additionalCharges || 0)) * viewingInvoice.gstPercent) / 100).toFixed(2)}</strong>
                 </div>
-                <hr style={{ margin: '8px 0', borderColor: '#dee2e6' }} />
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.1rem' }}>
-                  <strong>Grand Total:</strong>
-                  <strong>₹{viewingInvoice.grandTotal.toFixed(2)}</strong>
-                </div>
-              </div>
-            </div>
+              );
+            })()}
 
             {viewingInvoice.termsAndConditions && (
               <div className="quotation-terms-card">
                 <h5 className="terms-card-title">Terms & Conditions & Bank Details</h5>
                 <div className="terms-card-content">
-                  {viewingInvoice.termsAndConditions}
+                  {renderFormattedTerms(viewingInvoice.termsAndConditions)}
                 </div>
               </div>
             )}

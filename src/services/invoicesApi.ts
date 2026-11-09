@@ -20,6 +20,7 @@ export interface CreateManualInvoicePayload {
   grandTotal: number;
   termsAndConditions?: string;
   isManual?: boolean;
+  taxType?: 'GST' | 'IGST';
 }
 
 export const invoicesApi = {
