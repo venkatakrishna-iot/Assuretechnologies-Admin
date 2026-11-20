@@ -7,9 +7,10 @@ interface VendorTableProps {
   onEdit: (vendor: Vendor) => void;
   onDelete: (id: string) => void;
   onToggleStatus: (id: string) => void;
+  updatingStatusId?: string | null;
 }
 
-export default function VendorTable({ vendors, onEdit, onDelete, onToggleStatus }: VendorTableProps) {
+export default function VendorTable({ vendors, onEdit, onDelete, onToggleStatus, updatingStatusId }: VendorTableProps) {
   if (vendors.length === 0) {
     return (
       <div className="table-container">
@@ -52,10 +53,14 @@ export default function VendorTable({ vendors, onEdit, onDelete, onToggleStatus 
               </td>
               <td>
                 <div className="actions-cell">
-                  <label className="switch" title="Toggle Status">
+                  <label 
+                    className={`switch ${updatingStatusId === vendor.id ? 'switch-loading' : ''}`} 
+                    title={updatingStatusId === vendor.id ? "Updating status..." : "Toggle Status"}
+                  >
                     <input 
                       type="checkbox" 
                       checked={vendor.status === 'Active'}
+                      disabled={updatingStatusId === vendor.id}
                       onChange={() => onToggleStatus(vendor.id)}
                     />
                     <span className="slider round"></span>

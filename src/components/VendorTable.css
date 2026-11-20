@@ -156,6 +156,15 @@
   height: 20px;
 }
 
+.switch.switch-loading {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.switch.switch-loading .slider {
+  cursor: wait;
+}
+
 .switch input { 
   opacity: 0;
   width: 0;

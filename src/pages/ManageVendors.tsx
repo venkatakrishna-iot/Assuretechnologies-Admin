@@ -18,6 +18,7 @@ export default function ManageVendors() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
   const itemsPerPage = 10;
 
   useEffect(() => {
@@ -89,31 +90,39 @@ export default function ManageVendors() {
   }, [currentPage, debouncedSearch]);
 
   const handleSave = async (vendorData: Omit<Vendor, 'id' | 'status'> & { aadharFile?: File; panFile?: File; shopPhotoFile?: File; id?: string }) => {
-    if (vendorData.id) {
-      // Edit existing
-      setVendors(prev => prev.map(v => v.id === vendorData.id ? vendorData as Vendor : v));
-      setIsModalOpen(false);
-      setEditingVendor(undefined);
-    } else {
-      // Add new
-      try {
-        const formData = new FormData();
-        formData.append('email', vendorData.email);
-        formData.append('mobile', vendorData.mobile);
-        formData.append('password', vendorData.password || 'TempPass123!');
-        formData.append('full_name', vendorData.fullName || '');
-        formData.append('business_name', vendorData.businessName || '');
-        formData.append('address', vendorData.fullAddress || '');
-        formData.append('gst_number', vendorData.gstNumber || '');
-        formData.append('gst_state_code', (vendorData as any).gstStateCode || (vendorData.gstNumber ? vendorData.gstNumber.slice(0, 2) : '37'));
-        formData.append('pincode', vendorData.pincode || '');
-        if (vendorData.businessDescription) formData.append('business_description', vendorData.businessDescription);
-        if (vendorData.bankAccountDetails) formData.append('bank_account_details', vendorData.bankAccountDetails);
+    try {
+      const formData = new FormData();
+      formData.append('email', vendorData.email);
+      formData.append('mobile', vendorData.mobile);
+      if (vendorData.password && vendorData.password.trim()) {
+        formData.append('password', vendorData.password.trim());
+      } else if (!vendorData.id) {
+        formData.append('password', 'TempPass123!');
+      }
+      formData.append('full_name', vendorData.fullName || '');
+      formData.append('business_name', vendorData.businessName || '');
+      formData.append('address', vendorData.fullAddress || '');
+      formData.append('gst_number', vendorData.gstNumber || '');
+      formData.append('gst_state_code', (vendorData as any).gstStateCode || (vendorData.gstNumber ? vendorData.gstNumber.slice(0, 2) : '37'));
+      formData.append('pincode', vendorData.pincode || '');
+      if (vendorData.businessDescription) formData.append('business_description', vendorData.businessDescription);
+      if (vendorData.bankAccountDetails) formData.append('bank_account_details', vendorData.bankAccountDetails);
 
-        if (vendorData.aadharFile) formData.append('aadhar_proof', vendorData.aadharFile);
-        if (vendorData.panFile) formData.append('pan_proof', vendorData.panFile);
-        if (vendorData.shopPhotoFile) formData.append('shop_photo', vendorData.shopPhotoFile);
+      if (vendorData.aadharFile instanceof File) formData.append('aadhar_proof', vendorData.aadharFile);
+      if (vendorData.panFile instanceof File) formData.append('pan_proof', vendorData.panFile);
+      if (vendorData.shopPhotoFile instanceof File) formData.append('shop_photo', vendorData.shopPhotoFile);
 
+      if (vendorData.id) {
+        // Edit existing
+        const response = await API.put(`/admin/vendors/${vendorData.id}`, formData);
+        if (response.data.success) {
+          Swal.fire('Updated!', 'Vendor has been updated successfully.', 'success');
+          fetchVendors();
+          setIsModalOpen(false);
+          setEditingVendor(undefined);
+        }
+      } else {
+        // Add new
         const response = await API.post('/admin/vendors', formData);
         if (response.data.success) {
           Swal.fire('Added!', 'Vendor has been added.', 'success');
@@ -121,10 +130,10 @@ export default function ManageVendors() {
           setIsModalOpen(false);
           setEditingVendor(undefined);
         }
-      } catch (error: any) {
-        console.error('Create vendor error:', error);
-        Swal.fire('Error', error?.response?.data?.message || 'Failed to add vendor', 'error');
       }
+    } catch (error: any) {
+      console.error('Save vendor error:', error);
+      Swal.fire('Error', error?.response?.data?.message || 'Failed to save vendor', 'error');
     }
   };
 
@@ -141,29 +150,51 @@ export default function ManageVendors() {
       showCancelButton: true,
       confirmButtonColor: '#ef4444',
       cancelButtonColor: '#64748b',
-      confirmButtonText: 'Yes, delete it!'
+      confirmButtonText: 'Yes, delete it!',
+      showLoaderOnConfirm: true,
+      allowOutsideClick: () => !Swal.isLoading(),
+      preConfirm: async () => {
+        try {
+          const response = await API.delete(`/admin/vendors/${id}`);
+          return response.data;
+        } catch (error: any) {
+          Swal.showValidationMessage(error?.response?.data?.message || 'Failed to delete vendor');
+        }
+      }
     }).then((result) => {
-      if (result.isConfirmed) {
-        setVendors(prev => prev.filter(v => v.id !== id));
+      if (result.isConfirmed && result.value) {
         Swal.fire({
           title: 'Deleted!',
-          text: 'Vendor has been removed successfully.',
+          text: result.value.message || 'Vendor has been removed successfully.',
           icon: 'success',
           confirmButtonColor: '#4F46E5',
           timer: 1500,
           showConfirmButton: false
         });
+        fetchVendors();
       }
     });
   };
 
-  const handleToggleStatus = (id: string) => {
-    setVendors(prev => prev.map(v => {
-      if (v.id === id) {
-        return { ...v, status: v.status === 'Active' ? 'Inactive' : 'Active' };
-      }
-      return v;
-    }));
+  const handleToggleStatus = async (id: string) => {
+    const vendor = vendors.find(v => v.id === id);
+    if (!vendor) return;
+    const newActive = vendor.status !== 'Active';
+    try {
+      setUpdatingStatusId(id);
+      await API.patch(`/admin/vendors/${id}/status`, { is_active: newActive });
+      setVendors(prev => prev.map(v => {
+        if (v.id === id) {
+          return { ...v, status: newActive ? 'Active' : 'Inactive' };
+        }
+        return v;
+      }));
+    } catch (error: any) {
+      console.error('Toggle status error:', error);
+      Swal.fire('Error', error?.response?.data?.message || 'Failed to update vendor status', 'error');
+    } finally {
+      setUpdatingStatusId(null);
+    }
   };
 
   return (
@@ -207,6 +238,7 @@ export default function ManageVendors() {
           onEdit={handleEdit} 
           onDelete={handleDelete}
           onToggleStatus={handleToggleStatus}
+          updatingStatusId={updatingStatusId}
         />
       </div>
 

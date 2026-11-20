@@ -13,6 +13,7 @@ interface VendorModalProps {
 }
 
 export default function VendorModal({ isOpen, onClose, onSave, vendor }: VendorModalProps) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     fullName: '',
     businessName: '',
@@ -129,7 +130,7 @@ export default function VendorModal({ isOpen, onClose, onSave, vendor }: VendorM
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const newErrors: Record<string, string> = {};
@@ -189,19 +190,24 @@ export default function VendorModal({ isOpen, onClose, onSave, vendor }: VendorM
       ...(shopPhotoFile && { shopPhotoFile, shopPhotoFileName: shopPhotoFile.name })
     };
 
-    if (vendor) {
-      onSave({ ...vendor, ...submittedData });
-    } else {
-      onSave(submittedData);
+    try {
+      setIsSubmitting(true);
+      if (vendor) {
+        await onSave({ ...vendor, ...submittedData });
+      } else {
+        await onSave(submittedData);
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const modalContent = (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={isSubmitting ? undefined : onClose}>
       <div className="modal-content vendor-modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2>{vendor ? 'Edit Vendor' : 'Add Vendor'}</h2>
-          <button className="close-btn" onClick={onClose}>&times;</button>
+          <button className="close-btn" onClick={onClose} disabled={isSubmitting}>&times;</button>
         </div>
 
         <form onSubmit={handleSubmit} className="modal-body scrollable-body" noValidate>
@@ -385,7 +391,14 @@ export default function VendorModal({ isOpen, onClose, onSave, vendor }: VendorM
           </div>
 
           <div className="modal-footer">
-            <button type="submit" className="btn-primary save-btn">Save</button>
+            <button 
+              type="submit" 
+              className="btn-primary save-btn" 
+              disabled={isSubmitting}
+            >
+              {isSubmitting && <span className="btn-spinner" />}
+              {isSubmitting ? (vendor ? 'Updating...' : 'Adding...') : 'Save'}
+            </button>
           </div>
         </form>
       </div>
