@@ -56,6 +56,18 @@ export default function ManageTechnicians() {
     setCurrentPage(1);
   }, [debouncedSearch]);
 
+  const getFileNameFromUrl = (url?: string, defaultLabel: string = 'Document') => {
+    if (!url) return '';
+    try {
+      const cleanUrl = url.split('?')[0];
+      const parts = cleanUrl.split('/');
+      const filename = parts[parts.length - 1];
+      return decodeURIComponent(filename) || defaultLabel;
+    } catch {
+      return defaultLabel;
+    }
+  };
+
   const fetchTechnicians = async () => {
     setLoading(true);
     try {
@@ -72,7 +84,13 @@ export default function ManageTechnicians() {
           services: Array.isArray(t.services_provided) ? t.services_provided : [],
           services_provided: Array.isArray(t.services_provided) ? t.services_provided : [],
           services_names: Array.isArray(t.services_names) ? t.services_names : [],
-          status: t.is_active ? 'Active' : 'Inactive'
+          status: t.is_active ? 'Active' : 'Inactive',
+          id_proof: t.id_proof || '',
+          noc_document: t.noc_document || '',
+          idFile: t.id_proof || undefined,
+          idFileName: t.id_proof ? getFileNameFromUrl(t.id_proof, 'Aadhar / ID Proof') : '',
+          nocFile: t.noc_document || undefined,
+          nocFileName: t.noc_document ? getFileNameFromUrl(t.noc_document, 'NOC Document') : '',
         }));
         setTechnicians(mappedTechs);
         if (response.data.pagination) {

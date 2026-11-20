@@ -28,6 +28,7 @@ export default function TechnicianTable({ technicians, servicesList = [], onEdit
             <th>Contact</th>
             <th>Location</th>
             <th>Assigned Services</th>
+            <th>ID Proof</th>
             <th>Status</th>
             <th>Actions</th>
           </tr>
@@ -61,11 +62,36 @@ export default function TechnicianTable({ technicians, servicesList = [], onEdit
                     )}
                   </div>
                 </td>
-              <td>
-                <span className={`status-badge ${tech.status.toLowerCase()}`}>
-                  {tech.status}
-                </span>
-              </td>
+                <td>
+                  {tech.idFile && typeof tech.idFile === 'string' ? (
+                    <a 
+                      href={tech.idFile} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="doc-preview-badge"
+                      title="View ID / Aadhar"
+                    >
+                      View ID
+                    </a>
+                  ) : tech.id_proof ? (
+                    <a 
+                      href={tech.id_proof} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="doc-preview-badge"
+                      title="View ID / Aadhar"
+                    >
+                      View ID
+                    </a>
+                  ) : (
+                    <span className="no-doc-badge">Not uploaded</span>
+                  )}
+                </td>
+                <td>
+                  <span className={`status-badge ${tech.status.toLowerCase()}`}>
+                    {tech.status}
+                  </span>
+                </td>
               <td>
                 <div className="actions-cell">
                   <label className="switch" title="Toggle Status">

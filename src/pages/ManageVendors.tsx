@@ -31,6 +31,18 @@ export default function ManageVendors() {
     setCurrentPage(1);
   }, [debouncedSearch]);
 
+  const getFileNameFromUrl = (url?: string, defaultLabel: string = 'Document') => {
+    if (!url) return '';
+    try {
+      const cleanUrl = url.split('?')[0];
+      const parts = cleanUrl.split('/');
+      const filename = parts[parts.length - 1];
+      return decodeURIComponent(filename) || defaultLabel;
+    } catch {
+      return defaultLabel;
+    }
+  };
+
   const fetchVendors = async () => {
     setLoading(true);
     try {
@@ -49,7 +61,13 @@ export default function ManageVendors() {
           pincode: v.pincode || '',
           businessDescription: v.business_description || '',
           bankAccountDetails: v.bank_account_details || '',
-          status: v.is_active ? 'Active' : 'Inactive'
+          status: v.is_active ? 'Active' : 'Inactive',
+          aadharFile: v.aadhar_proof || undefined,
+          aadharFileName: v.aadhar_proof ? getFileNameFromUrl(v.aadhar_proof, 'Aadhar Proof') : '',
+          panFile: v.pan_proof || undefined,
+          panFileName: v.pan_proof ? getFileNameFromUrl(v.pan_proof, 'PAN Proof') : '',
+          shopPhotoFile: v.shop_photo || undefined,
+          shopPhotoFileName: v.shop_photo ? getFileNameFromUrl(v.shop_photo, 'Shop Photo') : ''
         }));
         setVendors(mappedVendors);
         if (response.data.pagination) {

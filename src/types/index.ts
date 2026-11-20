@@ -32,6 +32,8 @@ export interface Technician {
   idFileName?: string;
   nocFile?: string | File;
   nocFileName?: string;
+  id_proof?: string;
+  noc_document?: string;
 }
 
 export interface DronePartner {

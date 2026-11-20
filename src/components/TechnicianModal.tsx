@@ -372,14 +372,14 @@ export default function TechnicianModal({ isOpen, onClose, onSave, technician, s
                 <label htmlFor="idFile" className="file-input-button">
                   Choose File
                 </label>
-                <span className="file-input-name">
-                  {idFile ? idFile.name : technician?.idFileName || 'No file chosen'}
+                <span className="file-input-name" title={idFile ? idFile.name : technician?.idFileName || (technician?.id_proof ? 'Aadhar / ID Proof' : 'No file chosen')}>
+                  {idFile ? idFile.name : technician?.idFileName || (technician?.id_proof ? 'Aadhar / ID Proof' : 'No file chosen')}
                 </span>
-                {(idFile || technician?.idFile) && (
+                {(idFile || technician?.idFile || technician?.id_proof) && (
                   <button 
                     type="button" 
                     className="preview-btn"
-                    onClick={() => handlePreview(idFile || technician?.idFile)}
+                    onClick={() => handlePreview(idFile || technician?.idFile || technician?.id_proof)}
                   >
                     Preview
                   </button>
@@ -400,14 +400,14 @@ export default function TechnicianModal({ isOpen, onClose, onSave, technician, s
                 <label htmlFor="nocFile" className="file-input-button">
                   Choose File
                 </label>
-                <span className="file-input-name">
-                  {nocFile ? nocFile.name : technician?.nocFileName || 'No file chosen'}
+                <span className="file-input-name" title={nocFile ? nocFile.name : technician?.nocFileName || (technician?.noc_document ? 'NOC Document' : 'No file chosen')}>
+                  {nocFile ? nocFile.name : technician?.nocFileName || (technician?.noc_document ? 'NOC Document' : 'No file chosen')}
                 </span>
-                {(nocFile || technician?.nocFile) && (
+                {(nocFile || technician?.nocFile || technician?.noc_document) && (
                   <button 
                     type="button" 
                     className="preview-btn"
-                    onClick={() => handlePreview(nocFile || technician?.nocFile)}
+                    onClick={() => handlePreview(nocFile || technician?.nocFile || technician?.noc_document)}
                   >
                     Preview
                   </button>
